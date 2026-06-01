@@ -1,0 +1,1187 @@
+Metadata-Version: 2.4
+Name: sufes
+Version: 0.2.0
+Summary: sufes generalized family analysis and plotting tools
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy
+Requires-Dist: matplotlib
+Requires-Dist: pandas
+Requires-Dist: seaborn
+
+# sufes family (k,i,j) — analyse et usage
+
+Ce dépôt contient des outils pour analyser une famille généralisée d'itérations entières
+inspirée des problèmes de type **Syracuse / Collatz**, et produire des visualisations.
+Le cœur est la CLI du package `sufes` (exécution via `python3 -m sufes`) qui :
+
+- calcule les trajectoires pour n dans un intervalle [start,end],
+- détecte et canonicalise les cycles (rotation minimale),
+- agrège des statistiques (divisions par k, distribution des puissances de k, stopping time, pics),
+- écrit des JSON de résumé et (pour le mode `--single-n`) un PNG montrant la trajectoire.
+
+## Sommaire
+
+- [Contexte et règle d'itération](#contexte-et-règle-ditération)
+- [Notions mathématiques (définitions + liens)](#notions-mathématiques-déﬁnitions--liens)
+- [Feature index (résumé rapide)](#feature-index-résumé-rapide)
+- [Installation](#installation)
+- [Options CLI détaillées](#options-cli-détaillées)
+- [Sorties et fichiers produits](#sorties-et-fichiers-produits)
+- [Commandes d'exemple](#commandes-dexemple)
+- [Features](#features)
+  - [Feature "epsilon"](#feature-epsilon)
+  - [Use case : `single_n_overall`](#use-case--single_n_overall)
+  - [Use case : `spirale`](#use-case--spirale)
+  - [Mode `proof`](#6-mode-proof--prouver-convergence-jusquà-n-pour-toutes-les-combinaisons-k-premier--p-i-j)
+
+  ## Feature index (résumé rapide)
+
+  Cette section sert de “menu” : pour chaque feature, on indique le but, les flags principaux, et les sorties typiques.
+  Les détails complets (définitions, fichiers exacts) sont plus bas dans le README.
+
+  ### Analyse / exploration
+
+  - **`epsilon`** — statistiques basées sur les valuations $k$-adiques le long d’une trajectoire, pour tous les premiers $k\le p$.
+    - Flags : `--epsilon-n`, `--epsilon-p`, `--epsilon-i`, `--epsilon-j`
+    - Sorties : CSV/JSON + PNG (si `matplotlib`)
+
+  - **`residu-distribution`** — distribution (moyenne / stats) des résidus $t \bmod k$ le long d’une trajectoire.
+    - Flags : `--residu-distribution-n`, `--residu-distribution-p` (et options `--residu-distribution-j-mult`, `--residu-distribution-all-j`)
+    - Sorties : CSV/JSON + PNG (plots par $k$ si `matplotlib`)
+
+  - **`mixing_property`** — “lag plot” des résidus $(r_t, r_{t+\ell})$ pour visualiser une structure / pseudo-mélange.
+    - Flags (typique) : `--mixing-property-n`, `--mixing-property-p`, `--mixing-property-i`, `--mixing-property-lag`, `--mixing-property-all-j`
+    - Sorties : PNG (un subplot par $k$)
+
+  - **`shannon_entropy`** — entropie de Shannon sur la distribution des résidus non nuls (comparée à $\log_2(k-1)$).
+    - Flags (typique) : `--shannon-entropy-n`, `--shannon-entropy-p`, `--shannon-entropy-i`, `--shannon-entropy-all-j`
+    - Sorties : CSV/JSON + PNG (cloud min/max/mean si all-j)
+
+  - **`gamma`** — métrique “gamma” agrégée sur la trajectoire (pour exploration), pour tous les premiers $k\le p$.
+    - Flags (typique) : `--gamma-n`, `--gamma-p`, `--gamma-i`, `--gamma-all-j`
+    - Sorties : CSV/JSON + PNG (un subplot par $k$)
+
+  - **`resistance`** — longueur d’alternance d’opérations (M/D/…) jusqu’à la première occurrence D→D.
+    - Flags (typique) : `--resistance-n`, `--resistance-p`, `--resistance-i`, `--resistance-all-j`, `--resistance-all-n`
+    - Sorties : CSV/JSON + PNG (et 3D plot si all-n + all-j)
+
+  - **`stopping`** — calcule le "stopping time" pour une valeur de départ `n` (ou pour tous les k premiers ≤ p).
+
+  - **`footprint`** — union des nœuds visités par toutes les trajectoires de départ $1..N$ et calcul de $S(N)$ (plus grand préfixe $1..S$ entièrement couvert).
+    - Flags (typique) : `--footprint-n` + (`--footprint-k` ou `--footprint-p`) + `--footprint-i` + `--footprint-j`
+    - Mode préfixes : `--footprint-prefixes` calcule $S(N')$ pour tout $1\le N'\le N$ (et produit une figure avec un subplot par $k$)
+    - Multi-j : `--footprint-j-multi M` superpose plusieurs courbes (différents $j$) dans le même subplot (boucle $0\le j<k\cdot M$)
+    - Sortie compacte : `--footprint-compact` (évite les fichiers détaillés par (k,j,N)) ; `--footprint-verbose` force l'écriture détaillée
+    - Check parité : `--footprint-check-parity` vérifie une règle attendue pour $S(N)$ et l'enregistre dans le JSON résumé :
+      - si $k=2$ : $S(N)=N+1$ si $N$ pair, sinon $S(N)=N$
+      - si $k\ge 3$ : $S(N)=N$ si $N$ pair, sinon $S(N)=N+1$
+
+  - **`pearson`** — calcul du coefficient de corrélation de Pearson entre résidus successifs le long d'une trajectoire.
+    - But : pour une valeur maximale `N` donnée, on calcule pour chaque valeur de départ n' = 1..N la corrélation de Pearson entre la série des résidus r_t = t % k et la série décalée r_{t+1}. L'objectif est d'évaluer la dépendance linéaire entre un résidu et le suivant le long des trajectoires pour une combinaison (k,i,j).
+    - Flags : `--pearson-n`, `--pearson-k`, `--pearson-p`, `--pearson-i`, `--pearson-j`, `--pearson-all-j`, `--pearson-workers`
+      - `--pearson-n N` : calcule la statistique pour toutes les valeurs de départ n' = 1..N.
+      - `--pearson-k K` : exécute pour un k donné (requiert `--pearson-n`).
+      - `--pearson-p P` : boucle sur tous les k premiers ≤ P (p-mode). Si utilisé, `--pearson-n` est obligatoire.
+      - `--pearson-i I` / `--pearson-j J` : paramètres i et j (par défaut i=1, j=0). Utilisez `--pearson-all-j` pour itérer j de 0..k-1.
+      - `--pearson-workers W` : (optionnel) nombre de workers pour paralléliser le calcul par tranches (flag présent, parallélisation minimale à implémenter si nécessaire).
+    - Sorties :
+      - Pour un seul (k,i,j) : `pearson_upto_n{N}_k{K}_i{I}_j{J}_summary.json` contenant un champ `per_n` (liste d'objets par n' avec la valeur de Pearson et métadonnées) et `mean_pearson` (moyenne des coefficients sur n'=1..N).
+      - En mode p (`--pearson-p P`) :
+        - `pearson_n{N}_p{P}_summaries.json` (liste de résumés par (k,i,j)),
+        - `pearson_n{N}_p{P}_by_kj.csv` (table CSV avec colonnes k,i,j,mean_pearson,reason,steps,peak),
+        - `pearson_n{N}_p{P}_pearson_by_k.png` — figure composée d'un subplot par k : chaque subplot trace Pearson vs n (lignes séparées pour chaque j si plusieurs j).
+        - `pearson_n{N}_p{P}_mean_by_k.png` — figure composée d'un subplot par k : chaque subplot trace la moyenne du coefficient de Pearson (y-axis) en fonction de j (x-axis).
+    - Exemple rapide (single-k) :
+
+      ```bash
+      python3 -m sufes --pearson-n 100 --pearson-k 5 --pearson-i 1 --pearson-j 0
+      ```
+
+    - Exemple rapide (p-mode, tous j) :
+
+      ```bash
+      python3 -m sufes --pearson-n 100 --pearson-p 7 --pearson-i 1 --pearson-all-j
+      ```
+
+    - Notes :
+      - Le JSON de `pearson_upto_n..._summary.json` inclut le tableau `per_n` contenant les coefficients de Pearson calculés pour chaque n' (et les champs `reason`, `steps`, `peak` quand ils sont disponibles). Le champ `mean_pearson` contient la moyenne (ignorer les entrées où l'algorithme a échoué).
+      - Si `matplotlib` n'est pas installé, les PNG ne seront pas produits (les routines de plotting sont entourées de garde `try/except`).
+
+    - But : pour chaque n' ≤ N, on recherche le nombre d'étapes avant d'atteindre une valeur strictement inférieure à n (stopping_time), et le nombre total d'étapes jusqu'à détection d'un cycle/divergence (total_stopping_time).
+    - Flags (typique) : `--stopping-n`, `--stopping-k` ou `--stopping-p`, `--stopping-i`, `--stopping-j`, `--stopping-all-j`, `--stopping-workers`
+    - Sorties : pour chaque (k,i,j) un JSON `stopping_upto_n{N}_k{k}_i{i}_j{j}_results.json` et `..._summary.json`; pour `--stopping-p` on produit aussi des PNG récapitulatifs :
+      - `stopping_n{N}_p{P}_stopping_time_by_k.png` (subplot par k, stopping_time vs n)
+      - `stopping_n{N}_p{P}_total_stopping_time_by_k.png` (subplot par k)
+      - `stopping_n{N}_p{P}_mean_stopping_time_by_k.png` / `_mean_total_stopping_time_by_k.png` (moyennes par j)
+    - Exemple rapide :
+
+      ```bash
+      python3 -m sufes --stopping-n 100 --stopping-p 7 --stopping-i 1 --stopping-all-j --stopping-workers 4
+      ```
+
+  - **`cycle`** — exploration des cycles et de leur taille pour une plage de départs.
+    - But : pour chaque n' ≤ N on détecte le cycle canonique (rotation minimale) atteint par la trajectoire et on agrège les longueurs de cycle par (k,i,j).
+    - Flags (typique) : `--cycle-n`, `--cycle-k` ou `--cycle-p`, `--cycle-i`, `--cycle-j`, `--cycle-all-j`, `--cycle-cardinality`
+    - Sorties : JSON de résumés par k (`results_cycle_k{k}_{start}_{end}.json`), CSV d'occurrences de cycles, et PNGs (subplots par k) montrant la distribution des longueurs / cardinalités.
+    - Exemple rapide :
+
+      ```bash
+      python3 -m sufes --cycle-n 1000 --cycle-p 31 --cycle-i 1 --cycle-all-j
+      ```
+
+  - **`altitude`** — mesure des pics (peak) et de la "distance to altitude" le long des trajectoires.
+    - But : pour chaque n' ≤ N on calcule le maximum atteint (peak) et la longueur du trajet jusqu'à atteindre un seuil/altitude (distance_to_altitude). On fournit aussi des métriques combinées (moyennes, p-mode par k).
+    - Flags (typique) : `--altitude-n`, `--altitude-k` ou `--altitude-p`, `--altitude-i`, `--altitude-j`, `--altitude-p` (mode p produit un subplot par k)
+    - Sorties : JSON/CSV détaillés et PNGs : subplot par k (si `--altitude-p`), courbes mean-peak vs k et mean-distance vs k.
+    - Exemple rapide :
+
+      ```bash
+      python3 -m sufes --altitude-n 100 --altitude-p 31 --altitude-i 1
+      ```
+
+
+  ### Diagnostic ponctuel (single value)
+
+  - **`single-n`** — diagnostic complet pour un seul $n$ (trajectoire + cycle/peak/steps + PNG).
+    - Flags : `--single-n` + (`--single-k --single-i --single-j` ou `--single-p`)
+    - Sorties : JSON + PNG
+
+  - **`single_n_overall`** — diagnostic détaillé “résidus” pour un seul $(n,k,i,j)$ (CSV pas-à-pas + plusieurs PNG + stats résidus).
+    - Flags : `--single-overall-n`, `--single-overall-k`, `--single-overall-i`, `--single-overall-j`
+    - Sorties : CSV + JSON + plusieurs PNG
+
+  - **`spirale`** — représentation de la trajectoire en coordonnées polaires (spirale).
+    - Flags : `--spirale-n`, `--spirale-k`, `--spirale-i`, `--spirale-j`, `--spirale-angle-mode`
+    - Sorties : JSON + PNG
+
+  ### Preuve / automatisation
+
+  - **`proof` / `proof-persist`** — preuve itérative “naïve” de convergence jusqu’à $N$ pour toutes les combinaisons $(k,i,j)$.
+    - Flags : `--proof`, `--proof-p`, `--proof-max-n` ; `--proof-persist`, `--proof-workers`, `--proof-j-mult`
+    - Sorties : CSV/JSON + logs + (optionnel) heatmaps
+
+## Contexte et règle d'itération
+
+Règle utilisée (implémentée dans `next_term_ji`)
+
+- si n % k == 0 alors n <- n // k
+- sinon r = n % k et, en mode non-alterné : n <- (k + i) * n + (j*k - i) * r
+
+Variante alternée
+
+- Activer `--alternated` fait apparaître un facteur qui dépend de n :
+  la formule utilise (-m)^n quand `--alt-m m` est fourni (par défaut m=1 -> (-1)^n).
+  Remarque : le code impose `m < k` (vérification faite au lancement).
+
+## Notions mathématiques (définitions + liens)
+
+Cette section regroupe quelques définitions utilisées dans les features, avec des liens vers des ressources externes.
+L’objectif est surtout d’aider à lire les sorties et à comprendre les notations.
+
+### sufes / Collatz (contexte)
+
+Le terme “sufes” est souvent utilisé en français pour désigner le problème de Collatz.
+Ici, on explore une **famille** de transformations paramétrées par $(k,i,j)$.
+
+Ressources :
+
+- Collatz conjecture (Wikipedia) : https://en.wikipedia.org/wiki/Collatz_conjecture
+- sufes problem (Wikipedia FR) : https://fr.wikipedia.org/wiki/Probl%C3%A8me_de_sufes
+
+### Valuation $p$-adique / $k$-adique
+
+Pour un entier $t$ et un **premier** $p$, la valuation $p$-adique $\nu_p(t)$ est le plus grand exposant $e$ tel que $p^e \mid t$.
+Dans ce dépôt, on parle de $\nu_k(t)$ et on se restreint typiquement à des $k$ premiers.
+
+Ressources :
+
+- p-adic valuation (Wikipedia) : https://en.wikipedia.org/wiki/P-adic_valuation
+
+### Entropie de Shannon (distribution des résidus non nuls)
+
+Si $X$ est une variable aléatoire discrète sur les résidus non nuls $\{1,\dots,k-1\}$ avec $\mathbb{P}(X=r)=p_r$,
+l’entropie de Shannon en base 2 est :
+
+$$
+H(X) = -\sum_{r=1}^{k-1} p_r \log_2(p_r)
+$$
+
+Le maximum théorique (distribution uniforme) vaut $H_{\max}=\log_2(k-1)$.
+
+Ressources :
+
+- Shannon entropy (Wikipedia) : https://en.wikipedia.org/wiki/Entropy_(information_theory)
+
+### Asymétrie (skewness)
+
+La skewness (asymétrie) est une mesure de dissymétrie d’une distribution.
+Une définition classique (skewness “population”) est :
+
+$$
+\gamma_1 = \frac{\mathbb{E}[(X-\mu)^3]}{\sigma^3}
+$$
+
+Ressources :
+
+- Skewness (Wikipedia) : https://en.wikipedia.org/wiki/Skewness
+
+### “Mixing property” (intuition)
+
+Dans ce dépôt, la feature `mixing_property` regarde les paires $(r_t, r_{t+\ell})$ où $r_t = t\bmod k$ est le résidu,
+et $\ell$ un décalage (lag). Visuellement, une “bonne mixing property” ressemble à un nuage sans structure évidente.
+Ce n’est pas une caractérisation formelle de mélange ergodique, mais un outil exploratoire.
+
+
+## Installation
+
+Le projet est maintenant structuré comme un package Python (`sufes`).
+
+### Installation rapide « hot » (mode editable)
+
+Ce mode est pratique pendant le développement : toute modification du code est immédiatement reflétée sans réinstaller.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install -e .
+```
+
+Test rapide :
+
+```bash
+python3 -m sufes --help
+```
+
+### Installation classique (wheel)
+
+Utile pour installer localement de façon “figée” ou copier sur une autre machine.
+
+1) Construire le package :
+
+```bash
+python3 -m pip install --upgrade build
+python3 -m build
+```
+
+Cela génère les artefacts dans `dist/` (typiquement `.whl` et `.tar.gz`).
+
+2) Installer la wheel :
+
+```bash
+python3 -m pip install dist/*.whl
+```
+
+Sur une autre machine : copiez le fichier `.whl`, puis exécutez la même commande d'installation.
+
+### Désinstallation
+
+```bash
+python3 -m pip uninstall sufes
+```
+
+### Installation / exécution avec Docker
+
+Si vous préférez exécuter la CLI dans un conteneur, vous pouvez construire l'image puis lancer les commandes sufes dedans.
+
+1) Build de l'image :
+
+```bash
+docker build -t sufes:local .
+```
+
+2) Vérifier la CLI dans le conteneur :
+
+```bash
+docker run --rm sufes:local --help
+```
+
+3) Exécuter une commande sufes (exemple) :
+
+```bash
+docker run --rm -v "$(pwd)/output:/app/output" sufes:local --single-overall-n 15367 --single-overall-k 17 --single-overall-i 1 --single-overall-j 0
+```
+
+Notes :
+
+- Le montage `-v "$(pwd)/output:/app/output"` permet de récupérer les fichiers générés sur votre machine hôte.
+- Vous pouvez remplacer les arguments en fin de commande par n'importe quelle option de `python3 -m sufes`.
+
+
+Options CLI détaillées
+
+Ci-dessous la liste complète des options disponibles dans `python3 -m sufes` (nom, type, valeur par défaut et description succincte) :
+
+> Note de maintenance (important)
+>
+> La “source de vérité” des options est `sufes/core.py` (fonction `main()` qui configure `argparse`).
+> Cette section du README est organisée **par feature**, et vise à refléter fidèlement les flags présents dans ce fichier.
+
+- `--start` (int, default=1) : valeur de départ incluse pour l'analyse (intervalle [start,end]).
+- `--end` (int, default=1000) : valeur de fin incluse pour l'analyse.
+- `--out` (str, default=None) : chemin du fichier JSON de sortie (optionnel). Si omis, les fichiers sont écrits dans le dossier de run sous `./output/`.
+- `--base` (int, default=3) : diviseur de base utilisé si `--k` n'est pas fourni.
+- `--k` (int, default=None) : diviseur k explicitement utilisé (remplace `--base` pour les runs non-famille).
+- `--family` (flag) : si présent, exécute la famille complète de règles pour le k donné (teste tous les `j` dans la plage configurée).
+- `--j` (int, default=None) : paramètre j (0..k-1 par défaut) — si omis, on prend j=0 pour les runs simples.
+- `--i` (int, default=1) : paramètre i à utiliser pour les runs non-famille (doit satisfaire 1..k-1 selon le contexte).
+- `--all-i` (flag) : si fourni, le script considère tous les i dans 1..k-1 ; sinon (par défaut) il restreint i à i < k/2 pour réduire le travail.
+- `--p` (int, default=None) : exécute la famille pour tous les diviseurs premiers `k` tels que k <= p.
+- `--kmax` (int, default=None) : exécute la famille pour tous les k = 2..kmax.
+- `--compact-json` (flag) : active un mode de sérialisation JSON compact qui n'enregistre pas les listes complètes d'origines (gain d'espace disque).
+
+- `--alternated` (flag) : active la variante alternée (forme générale : (k + i * factor) * n + ...). Voir aussi `--alt-m`.
+- `--alt-m` (int, default=1) : paramètre m utilisé pour la variante alternée ; le code utilise (-m)**n comme facteur (m=1 donne (-1)**n). Le script vérifie `alt_m < k` et sautera/ignorera les combos invalides.
+
+- `--workers` (int, default=1) : nombre de processus worker pour découper l'intervalle en chunks (mode `--start/--end`).
+- `--chunk-size` (int, default=100000) : taille des chunks quand `--workers > 1`.
+
+- `--max-iters` (int, default=500000) : nombre maximal d'itérations par trajectoire avant d'abandonner (considéré comme échec `max_iters`).
+- `--divergence-threshold` (float, default=1e18) : seuil numérique au-delà duquel la trajectoire est considérée « en divergence » et le point est marqué comme échec.
+
+- `--use-gmpy` (flag) : tenter d'utiliser `gmpy2` si installé pour l'arithmétique sur grands entiers (optionnel).
+- `--use-numba` (flag) : tenter d'utiliser `numba` pour accélérer la voie int64 (expérimental, dépend de l'installation et de la compatibilité).
+
+- `--single-n` (int, default=None) : exécute un diagnostic complet pour une seule valeur `n` donnée ; accompagnez-le de `--single-k`/`--single-i`/`--single-j` ou de `--single-p`.
+- `--single-k` (int, default=None) : k à utiliser pour `--single-n` si vous ne souhaitez pas utiliser `--base`.
+- `--single-i` (int, default=None) : i à utiliser pour `--single-n` (obligatoire sauf si `--single-p` fournit une autre logique).
+- `--single-j` (int, default=None) : j à utiliser pour `--single-n` (obligatoire sauf si `--single-p` fourni).
+- `--single-p` (int, default=None) : avec `--single-n`, exécute le diagnostic pour tous les k premiers <= p ; si utilisé, il faut fournir `--single-i` pour restreindre la boucle sur i (le script requiert `--single-i` dans ce cas).
+
+- `--proof` (flag) : mode de preuve rapide (itératif) — tente de prouver la convergence pour toutes les valeurs n ≤ `--proof-max-n` pour chaque combinaison (k premier ≤ `--proof-p`, i, j).
+- `--proof-p` (int, default=None) : valeur p pour le mode `--proof` / `--proof-persist` : on considère tous les k premiers ≤ p.
+- `--proof-max-n` (int, default=None) : borne N jusqu'à laquelle prouver la convergence (nécessaire en conjonction avec `--proof` ou `--proof-persist`).
+- `--proof-persist` (flag) : mode preuve persistant — conserve un fichier `proof_k{k}_i{i}_j{j}_maxproved.txt` par combinaison pour pouvoir reprendre ultérieurement.
+- `--proof-workers` (int, default=1) : nombre de workers à utiliser pour `--proof-persist` (par défaut 1).
+- `--proof-j-mult` (int, default=1) : multiplicateur appliqué à la borne de j dans les modes `--proof` / `--proof-persist`. Par défaut j varie dans 0..k-1. Si vous mettez `--proof-j-mult 2`, la boucle de j couvrira 0..(2*k-1). Valeur minimale 1.
+- `--proof-i` (int, default=None) : si fourni avec `--proof` / `--proof-persist`, calcule uniquement pour ce `i` (pas de boucle sur tous les i). La valeur doit vérifier `0 <= i < k`.
+
+Remarque : `--proof` / `--proof-persist` supportent aussi `--alternated` et `--alt-m` (comme les autres features). Les sorties CSV/JSON incluent maintenant les champs `alternated` et `alt_m`, et les fichiers de progression persistants incluent un suffixe `_altm{m}` lorsque `--alternated` est actif.
+- `--plot-proof` (flag) : génère des heatmaps/plots pour les résultats de `--proof` / `--proof-persist` (si `--proof-j-mult` est 1 ; sinon le script skippe les plots car les routines actuelles supposent j dans 0..k-1).
+
+Note sur `--proof-j-mult` : élargir la plage de j peut être utile pour certaines expérimentations, mais augmente linéairement le nombre de combinaisons (coût ≃ O(p * k * i_range * proof_j_mult)). Les fichiers persistants et le CSV/JSON produits contiendront les valeurs de j effectives (donc possiblement j >= k).
+
+
+## Référence CLI (par feature)
+
+Cette section regroupe **toutes les options des features** (celles ajoutées dans le groupe `Residue features` de `core.py`), avec des exemples courts.
+
+### `residu-distribution`
+
+Flags :
+
+- `--residu-distribution-n`
+- `--residu-distribution-p`
+- `--residu-distribution-i`
+- `--residu-distribution-j`
+- `--residu-distribution-j-mult`
+- `--residu-distribution-include-zero`
+- `--residu-distribution-all-j`
+- `--residu-distribution-all-n`
+
+Exemples :
+
+```bash
+python3 -m sufes --residu-distribution-n 1000 --residu-distribution-p 17 --residu-distribution-i 1
+python3 -m sufes --residu-distribution-n 1000 --residu-distribution-p 17 --residu-distribution-all-j
+```
+
+### `spirale`
+
+Flags :
+
+- `--spirale-n`
+- `--spirale-k`
+- `--spirale-p`
+- `--spirale-all`
+- `--spirale-i`
+- `--spirale-j`
+- `--spirale-angle-mode`
+
+Exemples :
+
+```bash
+python3 -m sufes --spirale-n 15367 --spirale-k 17 --spirale-i 1 --spirale-j 0 --spirale-angle-mode residue
+python3 -m sufes --spirale-n 15367 --spirale-p 31 --spirale-i 1 --spirale-j 0
+```
+
+### `single_n_overall` (résidus détaillés)
+
+Flags :
+
+- `--single-overall-n`
+- `--single-overall-k`
+- `--single-overall-i`
+- `--single-overall-j`
+
+Compat (legacy) :
+
+- `--residu-single-overall-n`
+- `--residu-single-overall-k`
+- `--residu-single-overall-i`
+- `--residu-single-overall-j`
+
+Exemple :
+
+```bash
+python3 -m sufes --single-overall-n 15367 --single-overall-k 17 --single-overall-i 1 --single-overall-j 0
+```
+
+### `residu-ecart-type` (écart-type des résidus)
+
+Flags :
+
+- `--residu-ecart-n`
+- `--residu-ecart-p`
+- `--residu-ecart-type-n`
+- `--residu-ecart-type-p`
+- `--residu-ecart-type-single-n`
+- `--residu-ecart-type-i`
+
+Exemples :
+
+```bash
+python3 -m sufes --residu-ecart-type-n 1000 --residu-ecart-type-p 31 --residu-ecart-type-i 1
+python3 -m sufes --residu-ecart-type-single-n 15367 --residu-ecart-type-p 31 --residu-ecart-type-i 1
+```
+
+### `coalescence`
+
+Flags :
+
+- `--coalescence-n`
+- `--coalescence-k`
+- `--coalescence-p`
+- `--coalescence-i`
+- `--coalescence-j`
+- `--coalescence-j-multi`
+- `--coalescence-verbose`
+
+Exemples :
+
+```bash
+python3 -m sufes --coalescence-n 1000 --coalescence-k 17 --coalescence-i 1 --coalescence-j 0
+python3 -m sufes --coalescence-n 1000 --coalescence-p 31 --coalescence-i 1 --coalescence-j-multi 2
+```
+
+### `kernel`
+
+Flags :
+
+- `--kernel`
+- `--kernel-k`
+- `--kernel-p`
+- `--kernel-i`
+- `--kernel-j`
+
+Exemples :
+
+```bash
+python3 -m sufes --kernel --kernel-k 17 --kernel-i 1 --kernel-j 0
+python3 -m sufes --kernel-p 31 --kernel-i 1 --kernel-j 0
+```
+
+### `k-adique`
+
+Flags :
+
+- `--k-adique-n`
+- `--k-adique-k`
+- `--k-adique-i`
+- `--k-adique-j`
+
+Exemple :
+
+```bash
+python3 -m sufes --k-adique-n 15367 --k-adique-k 17 --k-adique-i 1 --k-adique-j 0
+```
+
+### `lyapunov`
+
+Flags :
+
+- `--lyapunov-n`
+- `--lyapunov-k`
+- `--lyapunov-p`
+- `--lyapunov-i`
+- `--lyapunov-j`
+
+Exemples :
+
+```bash
+python3 -m sufes --lyapunov-n 15367 --lyapunov-k 17 --lyapunov-i 1 --lyapunov-j 0
+python3 -m sufes --lyapunov-n 15367 --lyapunov-p 31 --lyapunov-i 1 --lyapunov-j 0
+```
+
+### `cycle`
+
+Flags :
+
+- `--cycle-n`
+- `--cycle-k`
+- `--cycle-p`
+- `--cycle-i`
+- `--cycle-j`
+- `--cycle-all-j`
+- `--cycle-cardinality`
+- `--special-cycles`
+- `--extra-special-cycles`
+- `--fst-appearance`
+- `--cycle-j-multiple`
+- `--card-top-cycles`
+
+Exemples :
+
+```bash
+python3 -m sufes --cycle-n 1000 --cycle-k 17 --cycle-i 1 --cycle-j 0
+python3 -m sufes --cycle-n 1000 --cycle-p 31 --cycle-i 1 --cycle-all-j --cycle-cardinality
+```
+
+### `footprint` (ex-`spray`)
+
+Flags :
+
+- `--footprint-n`
+- `--footprint-k`
+- `--footprint-p`
+- `--footprint-i`
+- `--footprint-j`
+- `--footprint-n-multiple-k`
+- `--footprint-j-multi`
+- `--footprint-prefixes`
+- `--footprint-compact`
+- `--footprint-verbose`
+- `--footprint-check-parity`
+- `--footprint-n-delta`
+- `--footprint-total`
+
+Règles parité (si `--footprint-check-parity`) :
+
+- si $k=2$ : $S(N)=N+1$ si $N$ pair, sinon $S(N)=N$
+- si $k\ge 3$ : $S(N)=N$ si $N$ pair, sinon $S(N)=N+1$
+
+Exemples :
+
+```bash
+python3 -m sufes --footprint-n 1000 --footprint-k 17 --footprint-i 1 --footprint-j 0
+python3 -m sufes --footprint-n 1000 --footprint-p 31 --footprint-i 1 --footprint-j 0
+python3 -m sufes --footprint-n 200 --footprint-p 31 --footprint-i 1 --footprint-prefixes --footprint-j-multi 2 --footprint-check-parity
+python3 -m sufes --footprint-n 200 --footprint-p 31 --footprint-i 1 --footprint-prefixes --footprint-j-multi 2 --footprint-n-delta
+python3 -m sufes --footprint-n 200 --footprint-p 31 --footprint-i 1 --footprint-prefixes --footprint-j-multi 2 --footprint-total
+python3 -m sufes --footprint-n-multiple-k 1000 --footprint-p 31 --footprint-i 1 --footprint-prefixes --footprint-compact
+```
+
+### `epsilon`
+
+Flags :
+
+- `--epsilon-n`
+- `--epsilon-p`
+- `--epsilon-i`
+- `--epsilon-j`
+- `--epsilon-find-best-j`
+- `--epsilon-ordre-multiplicatif-j`
+- `--epsilon-table`
+
+Exemples :
+
+```bash
+python3 -m sufes --epsilon-n 12345678 --epsilon-p 1000 --epsilon-i 1 --epsilon-j 0
+python3 -m sufes --epsilon-n 12345678 --epsilon-p 1000 --epsilon-find-best-j
+```
+
+### `gamma`
+
+Flags :
+
+- `--gamma-n`
+- `--gamma-p`
+- `--gamma-i`
+- `--gamma-j`
+- `--gamma-all-i`
+- `--gamma-all-j`
+- `--plot-gamma`
+
+Exemples :
+
+```bash
+python3 -m sufes --gamma-n 15367 --gamma-p 31 --gamma-i 1 --gamma-j 0 --plot-gamma
+python3 -m sufes --gamma-n 15367 --gamma-p 31 --gamma-i 1 --gamma-all-j --plot-gamma
+```
+
+### `shannon-entropy`
+
+Flags :
+
+- `--shannon-entropy-n`
+- `--shannon-entropy-k`
+- `--shannon-entropy-p`
+- `--shannon-entropy-i`
+- `--shannon-entropy-j`
+- `--shannon-entropy-all-j`
+
+Exemples :
+
+```bash
+python3 -m sufes --shannon-entropy-n 15367 --shannon-entropy-k 17 --shannon-entropy-i 1 --shannon-entropy-j 0
+python3 -m sufes --shannon-entropy-n 15367 --shannon-entropy-p 31 --shannon-entropy-i 1 --shannon-entropy-all-j
+```
+
+### `mixing-property`
+
+Flags :
+
+- `--mixing-property-n`
+- `--mixing-property-k`
+- `--mixing-property-p`
+- `--mixing-property-i`
+- `--mixing-property-j`
+- `--mixing-property-all-j`
+- `--mixing-property-lag`
+- `--mixing-property-max-points`
+
+Exemples :
+
+```bash
+python3 -m sufes --mixing-property-n 15367 --mixing-property-k 17 --mixing-property-i 1 --mixing-property-j 0 --mixing-property-lag 1
+python3 -m sufes --mixing-property-n 15367 --mixing-property-p 31 --mixing-property-i 1 --mixing-property-all-j
+```
+
+### `resistance`
+
+Flags :
+
+- `--resistance-n`
+- `--resistance-k`
+- `--resistance-p`
+- `--resistance-i`
+- `--resistance-j`
+- `--resistance-all-j`
+- `--resistance-all-n`
+
+Exemples :
+
+```bash
+python3 -m sufes --resistance-n 1000 --resistance-k 17 --resistance-i 1 --resistance-j 0
+python3 -m sufes --resistance-n 1000 --resistance-p 31 --resistance-i 1 --resistance-all-j
+```
+
+### `altitude`
+
+Flags :
+
+- `--altitude-n`
+- `--altitude-k`
+- `--altitude-p`
+- `--altitude-i`
+- `--altitude-j`
+- `--altitude-partitionning`
+
+Exemples :
+
+```bash
+python3 -m sufes --altitude-n 1000 --altitude-k 17 --altitude-i 1 --altitude-j 0
+python3 -m sufes --altitude-n 1000 --altitude-p 31 --altitude-i 1
+```
+
+### `pearson`
+
+Flags :
+
+- `--pearson-n`
+- `--pearson-k`
+- `--pearson-p`
+- `--pearson-i`
+- `--pearson-j`
+- `--pearson-all-j`
+
+Exemples :
+
+```bash
+python3 -m sufes --pearson-n 1000 --pearson-k 17 --pearson-i 1 --pearson-j 0
+python3 -m sufes --pearson-n 1000 --pearson-p 31 --pearson-i 1 --pearson-all-j
+```
+
+### `dirichlet`
+
+Flags :
+
+- `--dirichlet-n`
+- `--dirichlet-k`
+- `--dirichlet-p`
+- `--dirichlet-i`
+- `--dirichlet-j`
+- `--dirichlet-plot-3d`
+
+Exemples :
+
+```bash
+python3 -m sufes --dirichlet-n 1000 --dirichlet-k 17 --dirichlet-i 1 --dirichlet-j 0
+python3 -m sufes --dirichlet-n 1000 --dirichlet-p 31 --dirichlet-i 1 --dirichlet-j 0
+```
+
+### `hamming`
+
+Flags :
+
+- `--hamming-n`
+- `--hamming-k`
+- `--hamming-p`
+- `--hamming-i`
+- `--hamming-j`
+- `--hamming-all-j`
+
+Exemples :
+
+```bash
+python3 -m sufes --hamming-n 1000 --hamming-k 17 --hamming-i 1 --hamming-j 0
+python3 -m sufes --hamming-n 1000 --hamming-p 31 --hamming-i 1 --hamming-all-j
+```
+
+### `datalake` (export JSON + reprise)
+
+But : exporter les résultats dans une arborescence stable sur disque (ou montable vers un bucket) et pouvoir reprendre après arrêt.
+
+Layout :
+
+- `{datalake_path}/k{k}/i{i}/chunk_XXXXXXXX_YYYYYYYY/data.json`
+- `{datalake_path}/k{k}/i{i}/chunk_XXXXXXXX_YYYYYYYY/jXXXX.json`
+- `{datalake_path}/k{k}/i{i}/cycles/jXXXX_cycles.json`
+- checkpoint : `{datalake_path}/k{k}/i{i}/checkpoint.json`
+
+Flags :
+
+- `--datalake-path`
+- `--datalake-k`
+- `--datalake-p` (exécute pour tous les k premiers <= p ; à utiliser à la place de `--datalake-k`)
+- `--datalake-i-max` (par défaut k ⇒ i=1..k)
+- `--datalake-n`
+- `--datalake-j-mult` (par défaut 2 ⇒ j dans 0..2k-1)
+- `--datalake-base-chunk` (taille de base, la taille effective croît lentement avec n)
+- `--datalake-trajectory-limit` (par défaut 200, 0 ⇒ ne stocke pas la trajectoire)
+- `--datalake-trajectory-hash` (ajoute un SHA256)
+
+Exemples :
+
+```bash
+python3 -m sufes --datalake-path /data/sufes_dl --datalake-k 47 --datalake-n 10000000 \
+  --datalake-base-chunk 10000 --datalake-j-mult 2 \
+  --datalake-trajectory-limit 200 --datalake-trajectory-hash
+
+# Variante: tous les k premiers <= p
+python3 -m sufes --datalake-path /data/sufes_dl --datalake-p 47 --datalake-n 1000000 \
+  --datalake-base-chunk 10000 --datalake-j-mult 2 --workers 4
+```
+
+
+Sorties et fichiers produits
+
+- À chaque exécution, un dossier daté est créé sous `./output/` :
+  `output/run_YYYYMMDD_HHMMSS_start_end/`.
+- Fichiers écrits dans ce dossier :
+  - `run_info.txt` : paramètres CLI utilisés pour la run,
+  - `run.log` : capture des stdout/stderr (le script tée stdout/stderr vers ce fichier),
+  - JSONs de résumé : `summary_k{K}_{start}_{end}.json` ou `results_family_k{K}_{start}_{end}.json` selon le mode,
+  - pour `--single-n`, on écrit aussi `single_n_{n}_k{K}_i{I}_j{J}.json` et un fichier image PNG (même basename + `.png`).
+
+  Note: pour la nouvelle fonctionnalité `--epsilon` le dossier de run utilise le préfixe `divisions_` au lieu de `run_` (ex: `output/divisions_YYYYMMDD_HHMMSS_...`).
+
+Remarque : actuellement le PNG produit pour `--single-n` est enregistré en ajoutant `.png` au chemin JSON (ex: `single_n_27_k3_i1_j0.json.png`).
+Si vous préférez un suffixe plus propre (sans `.json`), dites-le et je peux changer cela.
+
+Commandes d'exemple
+
+1) Lancer la famille pour toutes les valeurs premières k <= 23 pour n = 1..10000 (JSONs compactés) :
+
+```bash
+python3 -m sufes --start 1 --end 10000 --p 23 --compact-json
+```
+
+2) Exécuter la famille pour un k donné (par ex. k=11). Par défaut `i` est restreint à i < k/2
+
+```bash
+python3 -m sufes --start 1 --end 10000 --k 11 --family --compact-json
+```
+
+3) Lancer une analyse parallèle par chunks (ex: 2 workers, chunks de 50) — utile pour grandes plages :
+
+```bash
+python3 -m sufes --start 1 --end 100000 --k 5 --workers 2 --chunk-size 50000 --out merged_summary.json
+```
+
+4) Diagnostic pour une seule valeur n (génère JSON + PNG de la trajectoire) :
+
+```bash
+python3 -m sufes --single-n 27 --single-k 3 --single-i 1 --single-j 0
+```
+
+4b) Diagnostic « single-n » sur tous les k premiers <= p et tous i,j (génère des JSONs par k + PNG 3D) :
+
+```bash
+python3 -m sufes --single-n 27 --single-p 17 --max-iters 500000 --divergence-threshold 1e18
+```
+4c) Diagnostic « single-n » sur tous les k premiers <= p et pour un i spécifique (génère des JSONs par k + PNG 3D) :
+
+
+```bash
+python3 -m sufes --single-n 1536 --single-p 17 --single-i 1 --max-iters 500000 --divergence-threshold 1e18
+```
+
+Feature "epsilon"
+------------------
+
+Cette fonctionnalité calcule un diagnostic simple du paramètre $A_0$.
+
+Pour une valeur de départ `n` et pour tous les nombres premiers `k <= p` :
+
+- On simule la trajectoire selon la règle habituelle (avec les paramètres `i` et `j` fournis).
+- Pour chaque nœud visité on calcule la valuation $k$-adique $\nu_k(t)$ (plus grande puissance $e$ telle que $k^e$ divise $t$).
+- On estime ensuite
+
+$$
+A_0(k) = \frac{\#\{t\ \text{visité} : \nu_k(t)\ge 1\}}{\#\{t\ \text{visité}\}}.
+$$
+
+Puis on compare $A_0(k)$ à la valeur de référence
+
+$$
+\mathrm{ref}_1(k) = \frac{k}{2k-1}
+$$
+
+en reportant $\Delta = A_0-\mathrm{ref}_1$, $|\Delta|$ et le pourcentage $100\Delta/A_0$.
+
+Options CLI :
+
+- `--epsilon-n N` : valeur de départ `n` pour la simulation (obligatoire pour cette fonctionnalité)
+- `--epsilon-p P` : borne supérieure `p` — considérer tous les nombres premiers `k` tels que `k <= p` (obligatoire)
+- `--epsilon-i I` : paramètre `i` (par défaut `1`)
+- `--epsilon-j J` : paramètre `j` (par défaut `0`)
+
+Fichiers produits (dans le dossier de run `output/divisions_...`) :
+
+- `divisions_n{N}_p{P}_i{I}_j{J}.json` : JSON résumé (une ligne par `k`) contenant `A0`, `ref1`, `delta`, etc.
+- `divisions_n{N}_p{P}_i{I}_j{J}.csv` : même contenu au format CSV.
+
+Exemples :
+
+1) Calculer epsilon pour `n=12345678` et tous les premiers `k <= 1000` :
+
+```bash
+python3 -m sufes --epsilon-n 12345678 --epsilon-p 1000 --epsilon-i 1 --epsilon-j 1
+```
+
+Dans ce cas les fichiers seront écrits dans un dossier comme :
+
+```
+output/divisions_20260425_HHMMSS_n12345678/
+  divisions_n12345678_p1000_i1_j1.json
+  divisions_n12345678_p1000_i1_j1.csv
+  divisions_n12345678_p1000_i1_j1.png
+  epsilonv_over_Rstar_n12345678_p1000_i1_j1.png
+  run_info.txt
+  run.log
+```
+
+2) Même commande dans Docker (récupérer les fichiers dans `./output`) :
+
+```bash
+docker run --rm -v "$(pwd)/output:/app/output" sufes:local \
+  --epsilon-n 12345678 --epsilon-p 1000 --epsilon-i 1 --epsilon-j 1
+```
+
+Remarque : depuis le nettoyage de la feature, `epsilon` n'écrit plus de PNG et se limite aux sorties JSON/CSV.
+
+Nouveaux formats de sortie pour `--single-n`
+
+Depuis la dernière version, les sorties `--single-n --single-p` génèrent maintenant :
+
+- un PNG `single_n_{n}_p{p}_trajectories.png` avec un subplot par k affichant les trajectoires (comme avant),
+- un PNG `single_n_{n}_p{p}_steps_perk.png` affichant, pour chaque k (un subplot par k), la métrique "steps" (nombre d'étapes jusqu'au cycle) par valeur de j (seulement les cas convergents),
+- un PNG `single_n_{n}_p{p}_peak_perk.png` affichant de la même façon la métrique "peak" (valeur maximale rencontrée).
+
+Exemple (reproduction du run que vous avez mentionné) :
+
+```bash
+python3 -m sufes --single-n 15367 --single-p 17 --single-i 1 --max-iters 500000 --divergence-threshold 1e18
+```
+
+Les images se trouvent dans le dossier de run sous `output/run_YYYYMMDD_HHMMSS_start_end/` et portent les suffixes `_trajectories.png`, `_steps_perk.png` et `_peak_perk.png`.
+
+Feature "cycle" (taille des cycles pour n=1..N)
+
+Cette feature calcule la taille des cycles détectés par la règle généralisée pour
+toutes les valeurs de départ n dans 1..N. Elle permet d'analyser la structure des
+cycles par (k,i,j) et d'agréger la cardinalité des cycles canoniques rencontrés.
+
+Flags principaux :
+
+- `--cycle-n N` : borne supérieure N (on simule les trajectoires pour n=1..N)
+- `--cycle-k K` : exécute pour un k premier donné (utilisé avec `--cycle-n`)
+- `--cycle-p P` : boucle sur tous les k premiers ≤ P (produit un subplot par k)
+- `--cycle-i I` : paramètre i (par défaut 1)
+- `--cycle-j J` : paramètre j (par défaut 0)
+- `--cycle-all-j` : si vrai, boucle sur tous les j = 0..k-1 et calcule des moyennes par (k,j)
+- `--cycle-cardinality` : si présent, compte la cardinalité (nombre d'occurrences)
+  de chaque cycle canonique détecté et écrit un résumé CSV/JSON
+- `--special-cycles` : si vrai, détecte et écrit les combinaisons (k,i,j)
+  pour lesquelles tous les n=1..N ont la même taille de cycle (voir notes)
+
+Sorties typiques :
+
+- JSON/CSV récapitulant, pour chaque n testé, la `cycle_length`, la `cycle_key` canoni-
+  que, la `reason` d'arrêt (cycle/divergence/max_iters), etc. Exemple de base :
+  `cycle_N{N}_k{K}_i{I}_j{J}.json` et `.csv`.
+- Si `--cycle-cardinality` : un fichier `*_cardinality.json` et `*_cardinality.csv`
+  listant chaque cycle canonique et le nombre d'occurrences (utile pour repérer
+  les cycles fréquents). Le script imprime aussi un résumé console (TOP N).
+- Si `--special-cycles` : un fichier CSV `*_special_cycles.csv` est écrit si des
+  combinaisons (k,i,j) satisfont la condition demandée — chaque ligne contient
+  `k,i,j,cycle_size`.
+- Images PNG : courbes `cyclelen_by_n` (taille du cycle en fonction de n) et
+  figures récapitulatives par k/j quand on utilise `--cycle-p`.
+
+Exemples :
+
+1) Calculer les tailles de cycle pour n=1..1000 et k premiers ≤ 17 :
+
+```bash
+python3 -m sufes --cycle-n 1000 --cycle-p 17 --cycle-i 1
+```
+
+2) Idem, mais écrire les cardinalités canonisées des cycles et vérifier les "special"
+   combos (tous les n ont la même taille de cycle) :
+
+```bash
+python3 -m sufes --cycle-n 1000 --cycle-p 17 --cycle-i 1 --cycle-cardinality --special-cycles
+```
+
+Note sur `--special-cycles` : l'implémentation actuelle est stricte — elle signale
+une combinaison (k,i,j) seulement si, pour tous les n=1..N testés, la simulation
+conclut sur un cycle (`reason == 'cycle'`) et la `cycle_length` est identique pour
+tous les n. Si vous préférez une version plus tolérante (par ex. tolérer quelques
+exemples divergents ou utiliser un seuil en pourcentage), dites-le et j'ajouterai
+une option `--special-cycles-threshold` ou un mode `--special-cycles-min-count`.
+
+Feature "residu-distribution"
+
+Un outil lié aux résidus est disponible :
+
+- `--residu-distribution-n N --residu-distribution-p P` : pour chaque premier k ≤ P (i fixé à 1) et pour chaque j dans 0..2k-1 (ou plus via `--residu-distribution-j-mult`), calcule la trajectoire démarrant en N et collecte les résidus r_t = t mod k. Pour chaque combinaison (k,j) on calcule :
+  - `count_non_zero` : nombre de nœuds visités qui ont un résidu non nul,
+  - `mean_residue` : moyenne des résidus non nuls (somme / count_non_zero), ou `null` si aucun résidu non nul.
+  Les sorties sont enregistrées sous deux fichiers dans le dossier de run :
+  - `residu_distribution_n{N}_p{P}.csv` (colonnes : k,j,i,count_non_zero,mean_residue,reason)
+  - `residu_distribution_n{N}_p{P}.json` (structure JSON avec les mêmes lignes).
+
+Exemples :
+
+Calculer la distribution des résidus pour n=1000 et tous les premiers k ≤ 17 :
+
+```bash
+python3 -m sufes --residu-distribution-n 1000 --residu-distribution-p 17 --max-iters 200000 --divergence-threshold 1e18
+```
+
+Use case : `single_n_overall`
+-----------------------------
+
+Cette fonctionnalité exécute la simulation complète pour une seule valeur `n` donnée, un diviseur premier `k` donné, et des paramètres `i` et `j` donnés. La règle appliquée est la même que dans le reste du projet :
+
+- si `t % k == 0` alors `t <- t // k`
+- sinon `r = t % k` et `t <- (k + i) * t + (j*k - i) * r`
+
+Que produit `single_n_overall` :
+
+- Un fichier CSV listant chaque étape de la trajectoire : colonnes `step`, `value`, `remainder` (résidu modulo k), `is_divisible_by_k` (1 si divisible par `k`, sinon 0), `k_adic_valuation` (plus grande puissance `e` telle que `k^e` divise la valeur) ; le CSV inclut aussi en tête quelques méta-lignes commentées indiquant la raison d'arrêt (`cycle` / `divergence_threshold` / `max_iters`) et les statistiques calculées.
+- Deux images PNG :
+  - une image montrant la trajectoire (valeur en fonction du pas) — suffixe `_trajectory.png`,
+  - une image montrant les résidus (résidu modulo k en fonction du pas) — suffixe `_residues.png`,
+  - un bar chart montrant le pourcentage d'apparition de chaque reste `0..k-1` — suffixe `_residue_percentages.png`,
+  - un second bar chart séparé pour les résidus non nuls `1..k-1` (normalisé sur les seuls résidus non nuls) — suffixe `_residue_percentages_non_zero.png`.
+- Un résumé imprimé dans le `run.log` et sauvegardé en JSON contenant :
+  - `count_total` : nombre total d'étapes simulées,
+  - `count_divisible` : nombre d'étapes où la valeur est divisible par `k`,
+  - `lambda_divisible` : moyenne de divisibilité par puissances de `k`, définie par $\lambda = \mathbb{E}[\nu_k(t_s)]$ où $\nu_k(t)$ est la plus grande puissance $e$ telle que $k^e \mid t$,
+  - `lambda_divisible_non_zero` : même moyenne restreinte au sous-ensemble des résidus non nuls (donc en pratique `0.0` quand il y a des résidus non nuls),
+  - `residue_distribution` : distribution complète des résidus `0..k-1` avec, pour chaque reste, son `count` et son `percentage` d'apparition,
+  - `residue_percent_sum` : somme des pourcentages (normalisée à `100.0`),
+  - `non_zero_residue_distribution` : distribution des seuls résidus non nuls `1..k-1` avec pourcentages normalisés sur les non-nuls,
+  - `non_zero_residue_percent_sum` : somme des pourcentages non nuls (normalisée à `100.0`),
+  - `count_non_zero` : nombre d'étapes avec résidu non nul,
+  - `mean_non_zero` et `mean_total` : moyennes (respectivement sur résidus non nuls et sur tous les résidus),
+  - `var_non_zero` / `std_non_zero` et `var_total` / `std_total` : variance (normalisée par le nombre d'observations) et écart-type.
+
+Noms de fichiers produits (exemples) :
+
+- `single_overall_n{N}_k{K}_i{I}_j{J}.csv`
+- `single_overall_n{N}_k{K}_i{I}_j{J}_trajectory.png`
+- `single_overall_n{N}_k{K}_i{I}_j{J}_residues.png`
+- `single_overall_n{N}_k{K}_i{I}_j{J}_residue_percentages.png`
+- `single_overall_n{N}_k{K}_i{I}_j{J}_residue_percentages_non_zero.png`
+- `single_overall_n{N}_k{K}_i{I}_j{J}.json`
+
+Exemples de commandes :
+
+1) Exécuter pour un seul n/k/i/j :
+
+```bash
+python3 -m sufes --single-overall-n 15367 --single-overall-k 17 --single-overall-i 1 --single-overall-j 0
+```
+
+2) (Compatibilité) l'ancien préfixe `--residu-single-overall-*` est toujours reconnu mais il est recommandé d'utiliser les noms courts `--single-overall-*`.
+
+3) Ajuster le nombre maximal d'itérations ou le seuil de divergence :
+
+```bash
+python3 -m sufes --single-overall-n 15367 --single-overall-k 17 --single-overall-i 1 --single-overall-j 0 \
+  --max-iters 1000000 --divergence-threshold 1e20
+```
+
+Astuce : regardez le fichier `run.log` dans le dossier de sortie pour retrouver rapidement les statistiques imprimées (moyennes, variances, écart-types) pour la run.
+
+Use case : `spirale`
+--------------------
+
+Cette fonctionnalité génère une représentation en spirale de la trajectoire pour une seule valeur `n`, un diviseur premier `k`, et des paramètres `i` et `j`.
+
+- Angle : deux modes disponibles — `residue` (par défaut) calcule l'angle par classe de résidu : angle = 2π * (t % k) / k ; `step` calcule l'angle en fonction du numéro d'étape : angle = step * (2π / k).
+- Rayon : par défaut radius = log(abs(t) + 1) pour garder l'échelle lisible.
+- Sorties : un JSON `spirale_n{N}_k{K}_i{I}_j{J}.json` avec la liste des points et un PNG `spirale_n{N}_k{K}_i{I}_j{J}.png` montrant la spirale colorée par étape.
+
+Exemple de commande :
+
+```bash
+python3 -m sufes --spirale-n 15367 --spirale-k 17 --spirale-i 1 --spirale-j 0 --spirale-angle-mode residue
+```
+
+Vous pouvez tester le mode `step` en remplaçant `--spirale-angle-mode residue` par `--spirale-angle-mode step`.
+
+Remarques :
+- i est fixé à 1 pour ces opérations (si vous voulez changer cela, je peux ajouter une option `--residu-i`).
+- Le champ `reason` dans les sorties indique pourquoi la simulation s'est arrêtée pour la combinaison (cycle/divergence_threshold/max_iters).
+- Par défaut on sauvegarde seulement un échantillon (200 premières valeurs) dans certains JSON pour éviter des fichiers trop volumineux ; les CSV/JSON de distribution contiennent uniquement les statistiques demandées.
+
+Astuce : lancez `python3 -m sufes --help` pour obtenir une aide lisible ; les options sont groupées par fonctionnalité (General, Family, Single-n, Proof, Residue, ...).
+
+Exemple : utilisation de `--proof-j-mult`
+
+Vous pouvez étendre la plage de j testée par le mode `--proof` / `--proof-persist` avec `--proof-j-mult L` (par défaut 1). Par exemple `--proof-j-mult 2` fera varier j dans 0..(2*k-1).
+
+```bash
+python -m sufes --proof-persist --proof-p 47 --proof-max-n 100000000 --plot-proof --all-i --proof-j-mult 2 --workers 16 --max-iters 1000000 --divergence-threshold 1e14
+```
+
+Vous pouvez aussi fixer `i` avec `--proof-i` pour ne calculer qu'une seule valeur de `i` :
+
+```bash
+python3 -m sufes --proof-persist --proof-p 17 --proof-max-n 5000 --proof-i 1 --workers 4
+```
+
+
+5) Variante alternée avec m (ex : m=2) — exige m < k :
+
+```bash
+python3 -m sufes --start 1 --end 1000 --k 7 --i 1 --j 0 --alternated --alt-m 2
+```
+
+6) Mode "proof" — prouver convergence jusqu'à N pour toutes les combinaisons (k premier <= p, i, j)
+
+Le script propose un mode rapide de preuve qui itère sur toutes les valeurs premières k <= p et, pour
+chaque combinaison i (1..k-1) et j (0..k-1), tente de prouver la convergence pour tous les n <= N.
+La preuve est simple et ascendante : pour chaque n la simulation s'arrête et considère n comme prouvé si
+la trajectoire atteint une valeur strictement inférieure à n (puisque toutes les valeurs < n ont déjà été
+prouvées) ou si elle entre immédiatement dans un cycle. Si une trajectoire dépasse `--divergence-threshold`
+ou n'atteint pas de cycle avant `--max-iters`, la valeur n est considérée comme non prouvée et le script
+s'arrête pour la combinaison (k,i,j) en cours — on conserve alors `max_proved = n-1`.
+
+Flags pertinents pour ce mode :
+
+- `--proof` : active le mode proof.
+- `--proof-p P` : considère tous les diviseurs premiers k tels que k <= P.
+- `--proof-max-n N` : preuve de convergence pour tous les n dans 1..N (nécessaire avec `--proof`).
+- `--proof-i I` (optionnel) : restreint la preuve à une seule valeur de `i` (au lieu de balayer toute la plage de i).
+- `--max-iters`, `--divergence-threshold` : contrôlent le comportement de coupure (comme pour les runs normaux).
+- `--alternated` / `--alt-m` : si fournis, la preuve est réalisée pour la variante alternée correspondante.
+- `--plot-proof` : génère une image PNG avec des heatmaps (un graphe par k) pour `--proof` / `--proof-persist`.
+
+Sorties produites par le mode `--proof` :
+
+- Un résumé JSON `proof_p{p}_maxn{N}.json` contenu dans le répertoire de run.
+- Un CSV `proof_p{p}_maxn{N}.csv` (une ligne par combinaison k,i,j) contenant les colonnes : k,i,j,max_proved,status,reason.
+- Une table compacte imprimée sur stdout récapitulant les mêmes informations.
+
+Exemple : prouver la convergence pour tous les k premiers <= 5 et tous les n <= 100 :
+
+```bash
+python3 -m sufes --proof --proof-p 5 --proof-max-n 100 --max-iters 200000 --divergence-threshold 1e18
+
+Commandes d'exemple pour `--proof` / `--proof-persist`
+
+Voici des commandes pratiques pour tester et lancer la preuve persistante. Elles supposent
+que vous exécutez le script depuis la racine du dépôt.
+
+- Petit test (reproduction rapide) — exécute une preuve persistante pour p=17 et N=5000
+  en forçant tous les i (équivalent de `--all-i`) et en utilisant 4 workers :
+
+```bash
+python3 -m sufes --proof-persist --proof-p 17 --proof-max-n 5000 --all-i \
+  --proof-workers 4 --max-iters 500000 --divergence-threshold 1e18 --plot-proof
+```
+
+- Commande pilote recommandée avant un gros run (p=29,N=1e7) : lancez d'abord un petit
+  test représentatif pour vérifier les temps et la configuration matérielle :
+
+```bash
+python3 -m sufes --proof-persist --proof-p 29 --proof-max-n 5000 --all-i \
+  --proof-workers 8 --max-iters 500000 --divergence-threshold 1e18
+```
+
+- Run cible (p=29, N=10^7) — exemple de commande recommandée pour une machine multicore.
+  Ajustez `--proof-workers` selon le nombre de cœurs/threads réels (ex: 8 ou 16) ;
+  commencez par le pilote ci-dessus pour valider les paramètres :
+
+```bash
+python3 -m sufes --proof-persist --proof-p 29 --proof-max-n 10000000 --all-i \
+  --proof-workers 8 --max-iters 1000000 --divergence-threshold 1e20
+```
+
+Remarques pratiques :
+
+- Le mode `--proof-persist` crée dans le dossier de sortie des fichiers `proof_k{k}_i{i}_j{j}_maxproved.txt`
+  (un fichier par combinaison) qui enregistrent la progression pour pouvoir reprendre ultérieurement.
+- Avant d'un très gros run, vérifiez sur un petit pilote la mémoire et le temps par combinaison.
+- Si vous préférez restreindre la plage d'i (ex: i < k/2) retirez `--all-i` pour réduire le travail.
+
+```
+
+Notes et mises en garde :
+
+- Le mode est volontairement conservateur et naïf : il simule chaque n séquentiellement et s'appuie sur la
+  propriété ascendante (atteindre une valeur < n prouve n). Pour de grands N (~10^5+) la méthode peut être lente.
+- Pour accélérer : paralléliser sur les combinaisons (k,i,j) — je peux ajouter une option `--proof-workers` pour
+  distribuer le travail en pools si tu veux.
+- Le script enregistre également un statut `SKIPPED` si `--alt-m >= k` (paramètre alt_m invalide pour ce k).
+
+
+Options avancées utiles pour le diagnostic
+
+- Contrôler la tolérance numérique/temps d'itération :
+
+```bash
+python3 -m sufes --start 1 --end 10000 --k 5 --max-iters 1000000 --divergence-threshold 1e20
+```
+
+- Activer l'analyse multi-processus (voir l'exemple au point 3) pour découper l'intervalle en chunks et agréger les résultats.
+
+Dépendances
+
+- Le script principal n'exige que Python 3.6+ et bibliothèques standard. Pour générer les PNGs (`--single-n`) il faut `matplotlib`.
+- Pour le post-traitement / heatmaps, installez `pandas`, `numpy`, `matplotlib`, `seaborn`.
+
+Installation suggérée :
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt  # optionnel, ou installer matplotlib/pandas/seaborn au besoin
+```

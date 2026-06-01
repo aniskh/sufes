@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+output/
+.DS_Store
+*.log
+report/
+notebooks/
+datalake/
+scripts/

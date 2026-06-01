@@ -1,0 +1,4 @@
+[console_scripts]
+sufes = sufes.core:main
+sufes-plot-residu-csv = sufes.plot_residu_distribution_from_csv:main
+sufes-plot-typology-3d = sufes.plot_typology_3d_grid:main

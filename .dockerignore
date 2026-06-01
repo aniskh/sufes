@@ -1,0 +1,16 @@
+.git
+.gitignore
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+output/
+tests/
+venv/
+.venv/
+
+*.egg-info/
+dist/
+build/

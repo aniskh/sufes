@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sufes"
+version = "0.2.0"
+description = "sufes generalized family analysis and plotting tools"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "matplotlib",
+  "pandas",
+  "seaborn",
+]
+
+[project.scripts]
+sufes = "sufes.core:main"
+sufes-plot-typology-3d = "sufes.plot_typology_3d_grid:main"
+sufes-plot-residu-csv = "sufes.plot_residu_distribution_from_csv:main"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sufes*"]
+exclude = ["output*", "tests*", "tools*"]

@@ -1,0 +1,5 @@
+sufes package run
+feature: single-overall
+output_suffix: n1000000000000000000
+timestamp: 20260601_174326
+start=1, end=1000, base=3, k=None, j=None, p=None, kmax=None, compact_json=False, alternated=False, alt_m=1, all_i=False, workers=4, chunk_size=100000, max_iters=10000000, divergence_threshold=inf
