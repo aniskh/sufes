@@ -1,20 +1,26 @@
-# sufes — Analyse de la famille (k, i, j) de Syracuse généralisée
+# sufes — Analysis of the generalized (k, i, j) Syracuse family
 
-Ce dépôt fournit des outils pour analyser une famille de transformations entières
-paramétrée par `(k, i, j)`, inspirée du problème de **Syracuse / Collatz**.
-La CLI `python3 -m sufes` calcule des trajectoires, détecte des cycles, génère
-des statistiques et des visualisations.
+This repository provides tools to analyze a family of integer transformations
+parameterized by `(k, i, j)`, inspired by the **Syracuse / Collatz** problem.
+The CLI `python3 -m sufes` computes trajectories, detects cycles, generates
+statistics and visualizations.
+
+## 📄 Published document (Zenodo)
+
+The document associated with this repository is available here:
+
+→ https://zenodo.org/records/20498713
 
 ---
 
-## Sommaire
+## Table of Contents
 
-1. [Règle d'itération](#1-règle-ditération)
-2. [Notions mathématiques](#2-notions-mathématiques)
+1. [Iteration rule](#1-iteration-rule)
+2. [Mathematical background](#2-mathematical-background)
 3. [Installation](#3-installation)
-4. [Vue d'ensemble des features](#4-vue-densemble-des-features)
-5. [Référence CLI par feature](#5-référence-cli-par-feature)
-   - [5.1 divisions](#51-divisions--diagnostic-a)
+4. [Feature overview](#4-feature-overview)
+5. [CLI reference by feature](#5-cli-reference-by-feature)
+   - [5.1 divisions](#51-divisions--a-diagnostic)
    - [5.2 residu-distribution](#52-residu-distribution)
    - [5.3 footprint](#53-footprint)
    - [5.4 cycle](#54-cycle)
@@ -35,42 +41,42 @@ des statistiques et des visualisations.
    - [5.19 coalescence](#519-coalescence)
    - [5.20 kernel](#520-kernel)
    - [5.21 datalake](#521-datalake)
-6. [Options globales](#6-options-globales)
-7. [Structure des sorties](#7-structure-des-sorties)
-8. [Dépendances](#8-dépendances)
+6. [Global options](#6-global-options)
+7. [Output structure](#7-output-structure)
+8. [Dependencies](#8-dependencies)
 
 ---
 
-## 1. Règle d'itération
+## 1. Iteration rule
 
-La règle implémentée dans `next_term_ji(t, k, j, i)` est :
+The rule implemented in `next_term_ji(t, k, j, i)` is:
 
 ```
-si t % k == 0  →  t ← t // k
-sinon r = t % k  →  t ← (k + i) * t + (j*k - i) * r
+if t % k == 0  →  t ← t // k
+else r = t % k  →  t ← (k + i) * t + (j*k - i) * r
 ```
 
-**Variante alternée** (`--alternated`, `--alt-m m`) : le facteur `i` est remplacé
-par `i * (-m)^t`. Le code impose `m < k` et ignore les combinaisons invalides.
+**Alternated variant** (`--alternated`, `--alt-m m`): the factor `i` is replaced
+by `i * (-m)^t`. The code enforces `m < k` and skips invalid combinations.
 
 ---
 
-## 2. Notions mathématiques
+## 2. Mathematical background
 
-### Valuation k-adique
+### k-adic valuation
 
-Pour un entier `t` et un premier `k`, la valuation `ν_k(t)` est le plus grand
-exposant `e` tel que `k^e` divise `t`.
+For an integer `t` and a prime `k`, the valuation `ν_k(t)` is the largest
+exponent `e` such that `k^e` divides `t`.
 
 → [p-adic valuation (Wikipedia)](https://en.wikipedia.org/wiki/P-adic_valuation)
 
-### Entropie de Shannon (sur les résidus non nuls)
+### Shannon entropy (over non-zero residues)
 
 $$H(X) = -\sum_{r=1}^{k-1} p_r \log_2(p_r), \quad H_{\max} = \log_2(k-1)$$
 
 → [Shannon entropy (Wikipedia)](https://en.wikipedia.org/wiki/Entropy_(information_theory))
 
-### Asymétrie (skewness)
+### Skewness
 
 $$\gamma_1 = \frac{\mathbb{E}[(X-\mu)^3]}{\sigma^3}$$
 
@@ -78,15 +84,15 @@ $$\gamma_1 = \frac{\mathbb{E}[(X-\mu)^3]}{\sigma^3}$$
 
 ### Mixing property (intuition)
 
-La feature `mixing_property` inspecte les paires `(r_t, r_{t+ℓ})` où `r_t = t mod k`
-et `ℓ` est un décalage (lag). Un nuage sans structure visible suggère un bon
-"mélange" — c'est un outil exploratoire, pas une propriété formelle.
+The `mixing_property` feature inspects pairs `(r_t, r_{t+ℓ})` where `r_t = t mod k`
+and `ℓ` is a lag. A structureless scatter plot suggests good "mixing" — this is
+an exploratory tool, not a formal ergodic property.
 
 ---
 
 ## 3. Installation
 
-### Mode développement (editable)
+### Development mode (editable install)
 
 ```bash
 python3 -m venv .venv
@@ -95,13 +101,13 @@ pip install --upgrade pip
 pip install -e .
 ```
 
-Vérification :
+Verification:
 
 ```bash
 python3 -m sufes --help
 ```
 
-### Installation fixe (wheel)
+### Fixed install (wheel)
 
 ```bash
 pip install --upgrade build
@@ -115,93 +121,93 @@ pip install dist/*.whl
 # Build
 docker build -t sufes:local .
 
-# Vérification
+# Verify
 docker run --rm sufes:local --help
 
-# Exemple de run (les fichiers générés sont récupérés dans ./output/)
+# Example run (output files are retrieved in ./output/)
 docker run --rm -v "$(pwd)/output:/app/output" sufes:local \
   --single-overall-n 15367 --single-overall-k 17 --single-overall-i 1 --single-overall-j 0
 ```
 
 ---
 
-## 4. Vue d'ensemble des features
+## 4. Feature overview
 
-| Feature | But principal | Flags principaux |
+| Feature | Purpose | Main flags |
 |---|---|---|
-| `divisions` | Statistiques A₀ (valuations k-adiques) | `--divisions-n`, `--divisions-p`, `--divisions-i` |
-| `residu-distribution` | Distribution moyenne des résidus `t mod k` | `--residu-distribution-n`, `--residu-distribution-p` |
-| `footprint` | Union des nœuds visités par toutes les trajectoires 1..N | `--footprint-n`, `--footprint-p` |
-| `cycle` | Détection et cardinalité des cycles canoniques | `--cycle-n`, `--cycle-p` |
-| `proof` / `proof-persist` | Preuve de convergence ascendante jusqu'à N | `--proof`, `--proof-persist`, `--proof-p`, `--proof-max-n` |
-| `single-n` | Diagnostic complet pour un seul n | `--single-n`, `--single-k`, `--single-p` |
-| `single-overall` | Détail résidus pas-à-pas pour un seul (n,k,i,j) | `--single-overall-n`, `--single-overall-k` |
-| `spirale` | Trajectoire en coordonnées polaires | `--spirale-n`, `--spirale-k` |
-| `stopping` | Temps d'arrêt (stopping time) | `--stopping-n`, `--stopping-p` |
-| `pearson` | Corrélation de Pearson entre résidus successifs | `--pearson-n`, `--pearson-p` |
-| `altitude` | Pics (peak) et distance à un seuil | `--altitude-n`, `--altitude-p` |
-| `gamma` | Métrique γ agrégée sur la trajectoire | `--gamma-n`, `--gamma-p` |
-| `shannon-entropy` | Entropie de Shannon sur les résidus non nuls | `--shannon-entropy-n`, `--shannon-entropy-p` |
-| `mixing-property` | Lag plot des résidus | `--mixing-property-n`, `--mixing-property-p` |
-| `resistance` | Longueur avant la première alternance D→D | `--resistance-n`, `--resistance-p` |
-| `lyapunov` | Exposant de Lyapunov empirique | `--lyapunov-n`, `--lyapunov-p` |
-| `dirichlet` | Distribution de Dirichlet des résidus | `--dirichlet-n`, `--dirichlet-p` |
-| `hamming` | Distance de Hamming entre trajectoires | `--hamming-n`, `--hamming-p` |
-| `coalescence` | Comparaison des trajectoires de n et n+1 | `--coalescence-n`, `--coalescence-p` |
-| `kernel` | Analyse pour toutes les valeurs n < k | `--kernel`, `--kernel-k`, `--kernel-p` |
-| `datalake` | Export JSON resumable sur disque | `--datalake-path`, `--datalake-n` |
+| `divisions` | A₀ statistics (k-adic valuations) | `--divisions-n`, `--divisions-p`, `--divisions-i` |
+| `residu-distribution` | Mean distribution of residues `t mod k` | `--residu-distribution-n`, `--residu-distribution-p` |
+| `footprint` | Union of nodes visited by all trajectories 1..N | `--footprint-n`, `--footprint-p` |
+| `cycle` | Detection and cardinality of canonical cycles | `--cycle-n`, `--cycle-p` |
+| `proof` / `proof-persist` | Ascending convergence proof up to N | `--proof`, `--proof-persist`, `--proof-p`, `--proof-max-n` |
+| `single-n` | Full diagnostic for a single n | `--single-n`, `--single-k`, `--single-p` |
+| `single-overall` | Step-by-step residue detail for a single (n,k,i,j) | `--single-overall-n`, `--single-overall-k` |
+| `spirale` | Trajectory in polar coordinates | `--spirale-n`, `--spirale-k` |
+| `stopping` | Stopping time | `--stopping-n`, `--stopping-p` |
+| `pearson` | Pearson correlation between successive residues | `--pearson-n`, `--pearson-p` |
+| `altitude` | Trajectory peaks and distance to a threshold | `--altitude-n`, `--altitude-p` |
+| `gamma` | γ metric aggregated over the trajectory | `--gamma-n`, `--gamma-p` |
+| `shannon-entropy` | Shannon entropy over non-zero residues | `--shannon-entropy-n`, `--shannon-entropy-p` |
+| `mixing-property` | Lag plot of residues | `--mixing-property-n`, `--mixing-property-p` |
+| `resistance` | Length before first consecutive D→D operation | `--resistance-n`, `--resistance-p` |
+| `lyapunov` | Empirical Lyapunov exponent | `--lyapunov-n`, `--lyapunov-p` |
+| `dirichlet` | Dirichlet distribution of residues | `--dirichlet-n`, `--dirichlet-p` |
+| `hamming` | Hamming distance between trajectories | `--hamming-n`, `--hamming-p` |
+| `coalescence` | Comparison of trajectories of n and n+1 | `--coalescence-n`, `--coalescence-p` |
+| `kernel` | Analysis for all values n < k | `--kernel`, `--kernel-k`, `--kernel-p` |
+| `datalake` | Resumable JSON export to disk | `--datalake-path`, `--datalake-n` |
 
 ---
 
-## 5. Référence CLI par feature
+## 5. CLI reference by feature
 
-### 5.1 `divisions` — Diagnostic A₀
+### 5.1 `divisions` — A₀ diagnostic
 
-**But** : pour une valeur de départ `n` et tous les premiers `k ≤ p`, simule la
-trajectoire et calcule la fréquence des nœuds dont la valuation k-adique est ≥ 1 :
+**Purpose**: for a starting value `n` and all primes `k ≤ p`, simulates the
+trajectory and computes the frequency of visited nodes whose k-adic valuation is ≥ 1:
 
-$$A_0(k) = \frac{\#\{t \text{ visité} : \nu_k(t) \ge 1\}}{\#\{t \text{ visité}\}}$$
+$$A_0(k) = \frac{\#\{t \text{ visited} : \nu_k(t) \ge 1\}}{\#\{t \text{ visited}\}}$$
 
-Puis compare à la référence $\mathrm{ref}_1(k) = k/(2k-1)$, et rapporte
-$\Delta = A_0 - \mathrm{ref}_1$ et le pourcentage $100\Delta/A_0$.
+Then compares to the reference $\mathrm{ref}_1(k) = k/(2k-1)$, and reports
+$\Delta = A_0 - \mathrm{ref}_1$ and the percentage $100\Delta/A_0$.
 
-> **Note** : les anciens flags `--epsilon-*` sont encore acceptés comme alias dépréciés.
-> Préférez les flags `--divisions-*` pour les nouveaux runs.
+> **Note**: the old `--epsilon-*` flags are still accepted as deprecated aliases.
+> Use `--divisions-*` flags for new runs.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--divisions-n N` | int | — | Valeur de départ `n` (obligatoire) |
-| `--divisions-p P` | int | — | Borne sup. ; considère tous les k premiers ≤ P (obligatoire) |
-| `--divisions-i I` | int | 1 | Paramètre i |
-| `--divisions-j J` | int | None | Paramètre j fixe ; si omis, j=0 sauf si `--divisions-j-multi` actif |
-| `--divisions-j-multi M` | int | 1 | Boucle sur j ∈ [0, M·k) et agrège les résultats |
-| `--divisions-all-n` | flag | False | Boucle sur n₀ = 1..N et calcule la moyenne A₀ agrégée |
-| `--divisions-find-best-j` | flag | False | Pour chaque k, cherche le j qui minimise \|Δ\| |
-| `--divisions-ordre-multiplicatif-j` | flag | False | Calcule l'ordre multiplicatif de j+1 mod k |
-| `--divisions-table` | flag | False | Génère un CSV détaillé (k, v, count_ge_m) |
+| `--divisions-n N` | int | — | Starting value `n` (required) |
+| `--divisions-p P` | int | — | Upper bound; considers all primes k ≤ P (required) |
+| `--divisions-i I` | int | 1 | Parameter i |
+| `--divisions-j J` | int | None | Fixed j; if omitted, j=0 unless `--divisions-j-multi` is active |
+| `--divisions-j-multi M` | int | 1 | Loop over j ∈ [0, M·k) and aggregate results |
+| `--divisions-all-n` | flag | False | Loop over n₀ = 1..N and compute the aggregated mean A₀ |
+| `--divisions-find-best-j` | flag | False | For each k, find the j minimizing \|Δ\| |
+| `--divisions-ordre-multiplicatif-j` | flag | False | Compute the multiplicative order of j+1 mod k |
+| `--divisions-table` | flag | False | Generate a detailed CSV (k, v, count_ge_m) |
 
-**Sorties** (dans `output/divisions_YYYYMMDD_HHMMSS_.../`) :
+**Outputs** (in `output/divisions_YYYYMMDD_HHMMSS_.../`):
 
 ```
 divisions_n{N}_p{P}_i{I}.csv
 divisions_n{N}_p{P}_i{I}.json
-divisions_meanA0_n{N}_p{P}_i{I}.csv   # si --divisions-all-n ou --divisions-j-multi > 1
-divisions_meanA0_n{N}_p{P}_i{I}.png   # subplot par k (x = j), si matplotlib
+divisions_meanA0_n{N}_p{P}_i{I}.csv   # if --divisions-all-n or --divisions-j-multi > 1
+divisions_meanA0_n{N}_p{P}_i{I}.png   # subplot per k (x = j), if matplotlib available
 ```
 
-**Exemples** :
+**Examples**:
 
 ```bash
-# n fixe, j=0
+# Fixed n, j=0
 python3 -m sufes --divisions-n 12345678 --divisions-p 1000 --divisions-i 1 --divisions-j 0
 
-# Multi-j sur j ∈ [0, 2k) avec agrégation sur tous les n
+# Multi-j over j ∈ [0, 2k) with aggregation over all n
 python3 -m sufes --divisions-n 1000 --divisions-p 47 --divisions-i 1 \
   --divisions-j-multi 2 --divisions-all-n
 
-# Trouver le meilleur j pour chaque k
+# Find the best j for each k
 python3 -m sufes --divisions-n 12345678 --divisions-p 1000 --divisions-find-best-j
 ```
 
@@ -209,31 +215,31 @@ python3 -m sufes --divisions-n 12345678 --divisions-p 1000 --divisions-find-best
 
 ### 5.2 `residu-distribution`
 
-**But** : pour chaque premier `k ≤ p` et chaque `j ∈ [0, jmult·k)`, calcule la
-moyenne des résidus non nuls `r_t = t mod k` le long de la trajectoire démarrant en N.
+**Purpose**: for each prime `k ≤ p` and each `j ∈ [0, jmult·k)`, computes the
+mean of non-zero residues `r_t = t mod k` along the trajectory starting at N.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--residu-distribution-n N` | int | — | Valeur de départ N |
-| `--residu-distribution-p P` | int | — | Borne p (k premiers ≤ P) |
-| `--residu-distribution-i I` | int | 1 | Paramètre i |
-| `--residu-distribution-j J` | int | None | j fixe (sinon boucle sur j) |
-| `--residu-distribution-j-mult M` | int | 2 | Multiplicateur plage de j (j ∈ [0, M·k)) |
-| `--residu-distribution-all-j` | flag | False | Boucle sur tous les j = 0..k-1 |
-| `--residu-distribution-all-n` | flag | False | Agrège toutes les valeurs n₀ = 1..N |
-| `--residu-distribution-include-zero` | flag | False | Inclut les résidus nuls dans la moyenne |
+| `--residu-distribution-n N` | int | — | Starting value N |
+| `--residu-distribution-p P` | int | — | Bound p (primes k ≤ P) |
+| `--residu-distribution-i I` | int | 1 | Parameter i |
+| `--residu-distribution-j J` | int | None | Fixed j (otherwise loops over j) |
+| `--residu-distribution-j-mult M` | int | 2 | j range multiplier (j ∈ [0, M·k)) |
+| `--residu-distribution-all-j` | flag | False | Loop over all j = 0..k-1 |
+| `--residu-distribution-all-n` | flag | False | Aggregate all values n₀ = 1..N |
+| `--residu-distribution-include-zero` | flag | False | Include zero residues in the mean |
 
-**Sorties** :
+**Outputs**:
 
 ```
 residu_distribution_n{N}_p{P}_jmult{M}.csv
 residu_distribution_n{N}_p{P}_jmult{M}.json
-residu_distribution_n{N}_p{P}_jmult{M}.png   # si matplotlib
+residu_distribution_n{N}_p{P}_jmult{M}.png   # if matplotlib available
 ```
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --residu-distribution-n 1000 --residu-distribution-p 17
@@ -246,33 +252,33 @@ python3 -m sufes --residu-distribution-n 10000 --residu-distribution-p 47 \
 
 ### 5.3 `footprint`
 
-**But** : calcule l'union des nœuds visités par les trajectoires de départ `1..N`
-et détermine `S(N)`, le plus grand préfixe `1..S` entièrement couvert.
+**Purpose**: computes the union of nodes visited by starting trajectories `1..N`
+and determines `S(N)`, the largest prefix `1..S` fully covered.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--footprint-n N` | int | — | Borne N |
-| `--footprint-k K` | int | — | Diviseur k |
-| `--footprint-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--footprint-i I` | int | 1 | Paramètre i |
-| `--footprint-j J` | int | 0 | Paramètre j |
-| `--footprint-j-multi M` | int | 1 | Superpose plusieurs j ∈ [0, M·k) |
-| `--footprint-n-multiple-k` | int | — | Fixe N = valeur × k (au lieu de `--footprint-n`) |
-| `--footprint-prefixes` | flag | False | Calcule S(N') pour tout 1 ≤ N' ≤ N |
-| `--footprint-check-parity` | flag | False | Vérifie la règle de parité de S(N) |
-| `--footprint-compact` | flag | False | Évite les fichiers détaillés par (k,j,N) |
-| `--footprint-verbose` | flag | False | Force l'écriture des fichiers détaillés |
-| `--footprint-n-delta` | flag | False | Trace ΔS(N') = S(N') − S(N'−1) |
-| `--footprint-total` | flag | False | Trace le total cumulé de nœuds couverts |
+| `--footprint-n N` | int | — | Bound N |
+| `--footprint-k K` | int | — | Divisor k |
+| `--footprint-p P` | int | — | Loop over primes k ≤ P |
+| `--footprint-i I` | int | 1 | Parameter i |
+| `--footprint-j J` | int | 0 | Parameter j |
+| `--footprint-j-multi M` | int | 1 | Overlay multiple j ∈ [0, M·k) |
+| `--footprint-n-multiple-k` | int | — | Set N = value × k (instead of `--footprint-n`) |
+| `--footprint-prefixes` | flag | False | Compute S(N') for all 1 ≤ N' ≤ N |
+| `--footprint-check-parity` | flag | False | Check the parity rule for S(N) |
+| `--footprint-compact` | flag | False | Skip detailed per-(k,j,N) files |
+| `--footprint-verbose` | flag | False | Force writing detailed files |
+| `--footprint-n-delta` | flag | False | Plot ΔS(N') = S(N') − S(N'−1) |
+| `--footprint-total` | flag | False | Plot the cumulative total of covered nodes |
 
-**Règles de parité** (`--footprint-check-parity`) :
+**Parity rules** (`--footprint-check-parity`):
 
-- k = 2 : S(N) = N+1 si N pair, sinon S(N) = N
-- k ≥ 3 : S(N) = N si N pair, sinon S(N) = N+1
+- k = 2: S(N) = N+1 if N is even, otherwise S(N) = N
+- k ≥ 3: S(N) = N if N is even, otherwise S(N) = N+1
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --footprint-n 1000 --footprint-k 17 --footprint-i 1 --footprint-j 0
@@ -288,27 +294,27 @@ python3 -m sufes --footprint-n-multiple-k 1000 --footprint-p 31 --footprint-i 1 
 
 ### 5.4 `cycle`
 
-**But** : pour chaque `n ∈ [1, N]` détecte le cycle canonique (rotation minimale)
-atteint par la trajectoire et agrège les longueurs de cycle par `(k,i,j)`.
+**Purpose**: for each `n ∈ [1, N]` detects the canonical cycle (minimal rotation)
+reached by the trajectory and aggregates cycle lengths by `(k,i,j)`.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--cycle-n N` | int | — | Borne N |
-| `--cycle-k K` | int | — | Diviseur k |
-| `--cycle-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--cycle-i I` | int | 1 | Paramètre i |
-| `--cycle-j J` | int | 0 | Paramètre j |
-| `--cycle-all-j` | flag | False | Boucle sur j = 0..k-1 |
-| `--cycle-cardinality` | flag | False | Compte les occurrences de chaque cycle canonique |
-| `--special-cycles` | flag | False | Signale les (k,i,j) où tous les n ont le même cycle |
-| `--extra-special-cycles` | flag | False | Variante plus stricte de `--special-cycles` |
-| `--fst-appearance` | flag | False | Enregistre la première apparition de chaque cycle |
-| `--cycle-j-multiple M` | int | 1 | Multiplicateur pour la plage de j |
-| `--card-top-cycles` | int | 10 | Nombre de cycles fréquents à afficher |
+| `--cycle-n N` | int | — | Bound N |
+| `--cycle-k K` | int | — | Divisor k |
+| `--cycle-p P` | int | — | Loop over primes k ≤ P |
+| `--cycle-i I` | int | 1 | Parameter i |
+| `--cycle-j J` | int | 0 | Parameter j |
+| `--cycle-all-j` | flag | False | Loop over j = 0..k-1 |
+| `--cycle-cardinality` | flag | False | Count occurrences of each canonical cycle |
+| `--special-cycles` | flag | False | Report (k,i,j) where all n share the same cycle |
+| `--extra-special-cycles` | flag | False | Stricter variant of `--special-cycles` |
+| `--fst-appearance` | flag | False | Record the first appearance of each cycle |
+| `--cycle-j-multiple M` | int | 1 | Multiplier for the j range |
+| `--card-top-cycles` | int | 10 | Number of most frequent cycles to display |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --cycle-n 1000 --cycle-p 17 --cycle-i 1
@@ -321,92 +327,92 @@ python3 -m sufes --cycle-n 1000 --cycle-p 17 --cycle-i 1 \
 
 ### 5.5 `proof` / `proof-persist`
 
-**But** : prouve la convergence pour toutes les valeurs `n ≤ N` de façon ascendante.
-Pour chaque n, la simulation s'arrête dès que :
+**Purpose**: proves convergence for all values `n ≤ N` in ascending order.
+For each n, the simulation stops as soon as:
 
-- la trajectoire atteint une valeur `< n` (toutes les valeurs < n étant déjà prouvées), ou
-- un cycle est détecté.
+- the trajectory reaches a value `< n` (all values < n already proven), or
+- a cycle is detected.
 
-Si la trajectoire dépasse `--divergence-threshold` ou n'atteint pas de cycle avant
-`--max-iters`, la valeur n est considérée non prouvée (`max_proved = n − 1`).
+If the trajectory exceeds `--divergence-threshold` or does not reach a cycle before
+`--max-iters`, the value n is considered unproven (`max_proved = n − 1`).
 
-`--proof-persist` conserve un fichier de progression `proof_k{k}_i{i}_j{j}_maxproved.txt`
-par combinaison pour pouvoir reprendre un run interrompu.
+`--proof-persist` keeps a progress file `proof_k{k}_i{i}_j{j}_maxproved.txt`
+per combination to allow resuming an interrupted run.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--proof` | flag | — | Active le mode proof (run unique) |
-| `--proof-persist` | flag | — | Active le mode proof persistant (résumable) |
-| `--proof-p P` | int | — | Considère tous les k premiers ≤ P |
-| `--proof-k K` | int | — | Exécute uniquement pour ce k |
-| `--proof-max-n N` | int | — | Borne N (obligatoire avec `--proof` / `--proof-persist`) |
-| `--proof-i I` | int | None | Restreint à une seule valeur de i |
-| `--proof-j-mult M` | int | 1 | Étend j dans [0, M·k) |
-| `--proof-lake` | flag | False | Mode lake : conserve les nœuds visités comme oracle |
-| `--plot-proof` | flag | False | Génère des heatmaps par k |
-| `--workers W` | int | 4 | Workers pour paralléliser les combinaisons (k,i,j) |
+| `--proof` | flag | — | Enable proof mode (single run) |
+| `--proof-persist` | flag | — | Enable persistent proof mode (resumable) |
+| `--proof-p P` | int | — | Consider all primes k ≤ P |
+| `--proof-k K` | int | — | Run only for this k |
+| `--proof-max-n N` | int | — | Bound N (required with `--proof` / `--proof-persist`) |
+| `--proof-i I` | int | None | Restrict to a single value of i |
+| `--proof-j-mult M` | int | 1 | Extend j range to [0, M·k) |
+| `--proof-lake` | flag | False | Lake mode: keep visited nodes as an oracle |
+| `--plot-proof` | flag | False | Generate heatmaps per k |
+| `--workers W` | int | 4 | Workers to parallelize (k,i,j) combinations |
 
-**Sorties** :
+**Outputs**:
 
 ```
 proof_p{P}_maxn{N}.csv
 proof_p{P}_maxn{N}.json
-proof_k{k}_i{i}_j{j}_maxproved.txt   # fichiers de progression (proof-persist seulement)
+proof_k{k}_i{i}_j{j}_maxproved.txt   # progress files (proof-persist only)
 ```
 
-**Exemples** :
+**Examples**:
 
 ```bash
-# Test rapide
+# Quick test
 python3 -m sufes --proof --proof-p 5 --proof-max-n 100
 
-# Mode persistant (reprend après arrêt)
+# Persistent mode (resumes after interruption)
 python3 -m sufes --proof-persist --proof-p 17 --proof-max-n 5000 \
   --workers 4 --max-iters 500000 --plot-proof
 
-# Run large — ajuster --workers selon les cœurs disponibles
+# Large run — adjust --workers to available cores
 python3 -m sufes --proof-persist --proof-p 29 --proof-max-n 10000000 --all-i \
   --workers 8 --max-iters 1000000 --divergence-threshold 1e20
 
-# Avec j étendu
+# Extended j range
 python3 -m sufes --proof-persist --proof-p 47 --proof-max-n 100000000 \
   --all-i --proof-j-mult 2 --workers 16 --max-iters 1000000 \
   --divergence-threshold 1e14 --plot-proof
 ```
 
-> **Conseil** : avant un gros run, lancez d'abord un petit pilote (`--proof-max-n 5000`)
-> pour estimer le temps et la consommation mémoire.
+> **Tip**: before a large run, first launch a small pilot (`--proof-max-n 5000`)
+> to estimate runtime and memory usage.
 
 ---
 
 ### 5.6 `single-n`
 
-**But** : diagnostic complet pour une seule valeur `n` — trajectoire, cycle détecté,
+**Purpose**: full diagnostic for a single value `n` — trajectory, detected cycle,
 stopping time, peak.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--single-n N` | int | — | Valeur n |
-| `--single-k K` | int | — | Diviseur k |
-| `--single-i I` | int | — | Paramètre i |
-| `--single-j J` | int | — | Paramètre j |
-| `--single-p P` | int | — | Boucle sur tous les k premiers ≤ P |
+| `--single-n N` | int | — | Value n |
+| `--single-k K` | int | — | Divisor k |
+| `--single-i I` | int | — | Parameter i |
+| `--single-j J` | int | — | Parameter j |
+| `--single-p P` | int | — | Loop over all primes k ≤ P |
 
-**Sorties** :
+**Outputs**:
 
 ```
 single_n_{N}_k{K}_i{I}_j{J}.json
-single_n_{N}_k{K}_i{I}_j{J}.png              # trajectoire
-single_n_{N}_p{P}_trajectories.png           # mode --single-p
+single_n_{N}_k{K}_i{I}_j{J}.png              # trajectory
+single_n_{N}_p{P}_trajectories.png           # --single-p mode
 single_n_{N}_p{P}_steps_perk.png
 single_n_{N}_p{P}_peak_perk.png
 ```
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --single-n 27 --single-k 3 --single-i 1 --single-j 0
@@ -418,28 +424,28 @@ python3 -m sufes --single-n 15367 --single-p 17 --single-i 1
 
 ### 5.7 `single-overall`
 
-**But** : diagnostic détaillé résidus pour un seul `(n,k,i,j)` — tableau pas-à-pas,
-distribution complète des résidus, stats (moyenne, variance, écart-type).
+**Purpose**: detailed residue diagnostic for a single `(n,k,i,j)` — step-by-step
+table, full residue distribution, statistics (mean, variance, standard deviation).
 
-Le JSON de sortie contient notamment :
-- `count_total`, `count_divisible` : nombre total d'étapes et nombre de divisions
-- `lambda_divisible` : $\mathbb{E}[\nu_k(t_s)]$, espérance de la valuation k-adique
-- `residue_distribution` : distribution complète des résidus `0..k-1`
-- `non_zero_residue_distribution` : distribution restreinte aux résidus non nuls
+The output JSON contains in particular:
+- `count_total`, `count_divisible`: total number of steps and number of divisions
+- `lambda_divisible`: $\mathbb{E}[\nu_k(t_s)]$, expected k-adic valuation
+- `residue_distribution`: full distribution of residues `0..k-1`
+- `non_zero_residue_distribution`: distribution restricted to non-zero residues
 - `mean_non_zero`, `std_non_zero`, `mean_total`, `std_total`
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--single-overall-n N` | int | — | Valeur n |
-| `--single-overall-k K` | int | — | Diviseur k |
-| `--single-overall-i I` | int | — | Paramètre i |
-| `--single-overall-j J` | int | — | Paramètre j |
+| `--single-overall-n N` | int | — | Value n |
+| `--single-overall-k K` | int | — | Divisor k |
+| `--single-overall-i I` | int | — | Parameter i |
+| `--single-overall-j J` | int | — | Parameter j |
 
-> Les anciens flags `--residu-single-overall-*` sont encore acceptés.
+> The legacy flags `--residu-single-overall-*` are still accepted.
 
-**Sorties** :
+**Outputs**:
 
 ```
 single_overall_n{N}_k{K}_i{I}_j{J}.csv
@@ -450,7 +456,7 @@ single_overall_n{N}_k{K}_i{I}_j{J}_residue_percentages.png
 single_overall_n{N}_k{K}_i{I}_j{J}_residue_percentages_non_zero.png
 ```
 
-**Exemple** :
+**Example**:
 
 ```bash
 python3 -m sufes --single-overall-n 15367 --single-overall-k 17 \
@@ -461,22 +467,22 @@ python3 -m sufes --single-overall-n 15367 --single-overall-k 17 \
 
 ### 5.8 `spirale`
 
-**But** : représentation polaire de la trajectoire (angle basé sur le résidu ou
-le numéro d'étape, rayon = log(|t|+1)).
+**Purpose**: polar representation of the trajectory (angle based on residue or
+step number, radius = log(|t|+1)).
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--spirale-n N` | int | — | Valeur n |
-| `--spirale-k K` | int | — | Diviseur k |
-| `--spirale-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--spirale-all` | flag | False | Inclut les k non premiers (avec `--spirale-p`) |
-| `--spirale-i I` | int | 1 | Paramètre i |
-| `--spirale-j J` | int | 0 | Paramètre j |
-| `--spirale-angle-mode` | str | `residue` | `residue` (angle = 2π·(t%k)/k) ou `step` |
+| `--spirale-n N` | int | — | Value n |
+| `--spirale-k K` | int | — | Divisor k |
+| `--spirale-p P` | int | — | Loop over primes k ≤ P |
+| `--spirale-all` | flag | False | Include non-prime k (with `--spirale-p`) |
+| `--spirale-i I` | int | 1 | Parameter i |
+| `--spirale-j J` | int | 0 | Parameter j |
+| `--spirale-angle-mode` | str | `residue` | `residue` (angle = 2π·(t%k)/k) or `step` |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --spirale-n 15367 --spirale-k 17 --spirale-i 1 --spirale-j 0 \
@@ -489,30 +495,30 @@ python3 -m sufes --spirale-n 15367 --spirale-p 31 --spirale-i 1 --spirale-j 0
 
 ### 5.9 `stopping`
 
-**But** : calcule le temps d'arrêt (nombre d'étapes avant d'atteindre une valeur
-strictement inférieure à `n`) pour chaque `n ∈ [1, N]`.
+**Purpose**: computes the stopping time (number of steps before reaching a value
+strictly less than `n`) for each `n ∈ [1, N]`.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--stopping-n N` | int | — | Borne N |
-| `--stopping-k K` | int | — | Diviseur k |
-| `--stopping-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--stopping-i I` | int | — | Paramètre i |
-| `--stopping-j J` | int | — | Paramètre j |
-| `--stopping-all-j` | flag | False | Boucle sur j = 0..k-1 |
+| `--stopping-n N` | int | — | Bound N |
+| `--stopping-k K` | int | — | Divisor k |
+| `--stopping-p P` | int | — | Loop over primes k ≤ P |
+| `--stopping-i I` | int | — | Parameter i |
+| `--stopping-j J` | int | — | Parameter j |
+| `--stopping-all-j` | flag | False | Loop over j = 0..k-1 |
 
-**Sorties** :
+**Outputs**:
 
 ```
 stopping_upto_n{N}_k{K}_i{I}_j{J}_results.json
 stopping_upto_n{N}_k{K}_i{I}_j{J}_summary.json
-stopping_n{N}_p{P}_stopping_time_by_k.png       # mode --stopping-p
+stopping_n{N}_p{P}_stopping_time_by_k.png       # --stopping-p mode
 stopping_n{N}_p{P}_mean_stopping_time_by_k.png
 ```
 
-**Exemple** :
+**Example**:
 
 ```bash
 python3 -m sufes --stopping-n 100 --stopping-p 7 --stopping-i 1 --stopping-all-j
@@ -522,31 +528,31 @@ python3 -m sufes --stopping-n 100 --stopping-p 7 --stopping-i 1 --stopping-all-j
 
 ### 5.10 `pearson`
 
-**But** : corrélation de Pearson entre résidus successifs `(r_t, r_{t+1})`
-le long des trajectoires pour `n' = 1..N`.
+**Purpose**: Pearson correlation between successive residues `(r_t, r_{t+1})`
+along trajectories for `n' = 1..N`.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--pearson-n N` | int | — | Borne N |
-| `--pearson-k K` | int | — | Diviseur k |
-| `--pearson-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--pearson-i I` | int | 1 | Paramètre i |
-| `--pearson-j J` | int | 0 | Paramètre j |
-| `--pearson-all-j` | flag | False | Boucle sur j = 0..k-1 |
+| `--pearson-n N` | int | — | Bound N |
+| `--pearson-k K` | int | — | Divisor k |
+| `--pearson-p P` | int | — | Loop over primes k ≤ P |
+| `--pearson-i I` | int | 1 | Parameter i |
+| `--pearson-j J` | int | 0 | Parameter j |
+| `--pearson-all-j` | flag | False | Loop over j = 0..k-1 |
 
-**Sorties** :
+**Outputs**:
 
 ```
 pearson_upto_n{N}_k{K}_i{I}_j{J}_summary.json
-pearson_n{N}_p{P}_summaries.json                # mode --pearson-p
+pearson_n{N}_p{P}_summaries.json                # --pearson-p mode
 pearson_n{N}_p{P}_by_kj.csv
 pearson_n{N}_p{P}_pearson_by_k.png
 pearson_n{N}_p{P}_mean_by_k.png
 ```
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --pearson-n 100 --pearson-k 5 --pearson-i 1 --pearson-j 0
@@ -558,21 +564,21 @@ python3 -m sufes --pearson-n 100 --pearson-p 7 --pearson-i 1 --pearson-all-j
 
 ### 5.11 `altitude`
 
-**But** : mesure le pic maximal atteint (peak) et la distance à un seuil
-(altitude) le long des trajectoires pour `n ∈ [1, N]`.
+**Purpose**: measures the maximum peak reached and the distance to a threshold
+(altitude) along trajectories for `n ∈ [1, N]`.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--altitude-n N` | int | — | Borne N |
-| `--altitude-k K` | int | — | Diviseur k |
-| `--altitude-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--altitude-i I` | int | 1 | Paramètre i |
-| `--altitude-j J` | int | 0 | Paramètre j |
-| `--altitude-partitionning` | flag | False | Active le partitionnement des résultats |
+| `--altitude-n N` | int | — | Bound N |
+| `--altitude-k K` | int | — | Divisor k |
+| `--altitude-p P` | int | — | Loop over primes k ≤ P |
+| `--altitude-i I` | int | 1 | Parameter i |
+| `--altitude-j J` | int | 0 | Parameter j |
+| `--altitude-partitionning` | flag | False | Enable result partitioning |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --altitude-n 1000 --altitude-k 17 --altitude-i 1 --altitude-j 0
@@ -584,22 +590,22 @@ python3 -m sufes --altitude-n 1000 --altitude-p 31 --altitude-i 1
 
 ### 5.12 `gamma`
 
-**But** : calcule une métrique γ agrégée sur la trajectoire pour tous les
-premiers `k ≤ p`.
+**Purpose**: computes a γ metric aggregated over the trajectory for all
+primes `k ≤ p`.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--gamma-n N` | int | — | Valeur de départ |
-| `--gamma-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--gamma-i I` | int | 1 | Paramètre i |
-| `--gamma-j J` | int | 0 | Paramètre j |
-| `--gamma-all-i` | flag | False | Boucle sur i = 1..k-1 |
-| `--gamma-all-j` | flag | False | Boucle sur j = 0..k-1 |
-| `--plot-gamma` | flag | False | Génère un PNG récapitulatif |
+| `--gamma-n N` | int | — | Starting value |
+| `--gamma-p P` | int | — | Loop over primes k ≤ P |
+| `--gamma-i I` | int | 1 | Parameter i |
+| `--gamma-j J` | int | 0 | Parameter j |
+| `--gamma-all-i` | flag | False | Loop over i = 1..k-1 |
+| `--gamma-all-j` | flag | False | Loop over j = 0..k-1 |
+| `--plot-gamma` | flag | False | Generate a summary PNG |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --gamma-n 15367 --gamma-p 31 --gamma-i 1 --gamma-j 0 --plot-gamma
@@ -611,21 +617,21 @@ python3 -m sufes --gamma-n 15367 --gamma-p 31 --gamma-i 1 --gamma-all-j --plot-g
 
 ### 5.13 `shannon-entropy`
 
-**But** : entropie de Shannon sur la distribution des résidus non nuls,
-comparée au maximum théorique log₂(k-1).
+**Purpose**: Shannon entropy over the distribution of non-zero residues,
+compared to the theoretical maximum log₂(k-1).
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--shannon-entropy-n N` | int | — | Valeur de départ |
-| `--shannon-entropy-k K` | int | — | Diviseur k |
-| `--shannon-entropy-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--shannon-entropy-i I` | int | 1 | Paramètre i |
-| `--shannon-entropy-j J` | int | 0 | Paramètre j |
-| `--shannon-entropy-all-j` | flag | False | Boucle sur j = 0..k-1 |
+| `--shannon-entropy-n N` | int | — | Starting value |
+| `--shannon-entropy-k K` | int | — | Divisor k |
+| `--shannon-entropy-p P` | int | — | Loop over primes k ≤ P |
+| `--shannon-entropy-i I` | int | 1 | Parameter i |
+| `--shannon-entropy-j J` | int | 0 | Parameter j |
+| `--shannon-entropy-all-j` | flag | False | Loop over j = 0..k-1 |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --shannon-entropy-n 15367 --shannon-entropy-k 17 \
@@ -639,23 +645,23 @@ python3 -m sufes --shannon-entropy-n 15367 --shannon-entropy-p 31 \
 
 ### 5.14 `mixing-property`
 
-**But** : lag plot des paires `(r_t, r_{t+ℓ})` pour visualiser la structure
-ou l'absence de structure des résidus.
+**Purpose**: lag plot of pairs `(r_t, r_{t+ℓ})` to visualize the structure
+or lack of structure in residues.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--mixing-property-n N` | int | — | Valeur de départ |
-| `--mixing-property-k K` | int | — | Diviseur k |
-| `--mixing-property-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--mixing-property-i I` | int | 1 | Paramètre i |
-| `--mixing-property-j J` | int | 0 | Paramètre j |
-| `--mixing-property-all-j` | flag | False | Boucle sur j = 0..k-1 |
-| `--mixing-property-lag L` | int | 1 | Décalage ℓ |
-| `--mixing-property-max-points M` | int | — | Limite le nombre de points tracés |
+| `--mixing-property-n N` | int | — | Starting value |
+| `--mixing-property-k K` | int | — | Divisor k |
+| `--mixing-property-p P` | int | — | Loop over primes k ≤ P |
+| `--mixing-property-i I` | int | 1 | Parameter i |
+| `--mixing-property-j J` | int | 0 | Parameter j |
+| `--mixing-property-all-j` | flag | False | Loop over j = 0..k-1 |
+| `--mixing-property-lag L` | int | 1 | Lag ℓ |
+| `--mixing-property-max-points M` | int | — | Limit the number of plotted points |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --mixing-property-n 15367 --mixing-property-k 17 \
@@ -669,22 +675,22 @@ python3 -m sufes --mixing-property-n 15367 --mixing-property-p 31 \
 
 ### 5.15 `resistance`
 
-**But** : longueur de l'alternance d'opérations (M/D/…) jusqu'à la première
-occurrence consécutive D→D.
+**Purpose**: length of the operation alternation (M/D/…) until the first
+consecutive D→D occurrence.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--resistance-n N` | int | — | Borne N |
-| `--resistance-k K` | int | — | Diviseur k |
-| `--resistance-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--resistance-i I` | int | 1 | Paramètre i |
-| `--resistance-j J` | int | 0 | Paramètre j |
-| `--resistance-all-j` | flag | False | Boucle sur j = 0..k-1 |
-| `--resistance-all-n` | flag | False | Agrège sur n₀ = 1..N |
+| `--resistance-n N` | int | — | Bound N |
+| `--resistance-k K` | int | — | Divisor k |
+| `--resistance-p P` | int | — | Loop over primes k ≤ P |
+| `--resistance-i I` | int | 1 | Parameter i |
+| `--resistance-j J` | int | 0 | Parameter j |
+| `--resistance-all-j` | flag | False | Loop over j = 0..k-1 |
+| `--resistance-all-n` | flag | False | Aggregate over n₀ = 1..N |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --resistance-n 1000 --resistance-k 17 --resistance-i 1 --resistance-j 0
@@ -696,19 +702,19 @@ python3 -m sufes --resistance-n 1000 --resistance-p 31 --resistance-i 1 --resist
 
 ### 5.16 `lyapunov`
 
-**But** : exposant de Lyapunov empirique le long des trajectoires.
+**Purpose**: empirical Lyapunov exponent along trajectories.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--lyapunov-n N` | int | — | Valeur de départ |
-| `--lyapunov-k K` | int | — | Diviseur k |
-| `--lyapunov-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--lyapunov-i I` | int | 1 | Paramètre i |
-| `--lyapunov-j J` | int | 0 | Paramètre j |
+| `--lyapunov-n N` | int | — | Starting value |
+| `--lyapunov-k K` | int | — | Divisor k |
+| `--lyapunov-p P` | int | — | Loop over primes k ≤ P |
+| `--lyapunov-i I` | int | 1 | Parameter i |
+| `--lyapunov-j J` | int | 0 | Parameter j |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --lyapunov-n 15367 --lyapunov-k 17 --lyapunov-i 1 --lyapunov-j 0
@@ -720,20 +726,20 @@ python3 -m sufes --lyapunov-n 15367 --lyapunov-p 31 --lyapunov-i 1 --lyapunov-j 
 
 ### 5.17 `dirichlet`
 
-**But** : distribution de Dirichlet des résidus de la trajectoire.
+**Purpose**: Dirichlet distribution of trajectory residues.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--dirichlet-n N` | int | — | Borne N |
-| `--dirichlet-k K` | int | — | Diviseur k |
-| `--dirichlet-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--dirichlet-i I` | int | 1 | Paramètre i |
-| `--dirichlet-j J` | int | 0 | Paramètre j |
-| `--dirichlet-plot-3d` | flag | False | Génère un graphe 3D |
+| `--dirichlet-n N` | int | — | Bound N |
+| `--dirichlet-k K` | int | — | Divisor k |
+| `--dirichlet-p P` | int | — | Loop over primes k ≤ P |
+| `--dirichlet-i I` | int | 1 | Parameter i |
+| `--dirichlet-j J` | int | 0 | Parameter j |
+| `--dirichlet-plot-3d` | flag | False | Generate a 3D plot |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --dirichlet-n 1000 --dirichlet-k 17 --dirichlet-i 1 --dirichlet-j 0
@@ -745,20 +751,20 @@ python3 -m sufes --dirichlet-n 1000 --dirichlet-p 31 --dirichlet-i 1 --dirichlet
 
 ### 5.18 `hamming`
 
-**But** : distance de Hamming entre trajectoires encodées sur les résidus.
+**Purpose**: Hamming distance between residue-encoded trajectories.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--hamming-n N` | int | — | Borne N |
-| `--hamming-k K` | int | — | Diviseur k |
-| `--hamming-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--hamming-i I` | int | 1 | Paramètre i |
-| `--hamming-j J` | int | 0 | Paramètre j |
-| `--hamming-all-j` | flag | False | Boucle sur j = 0..k-1 |
+| `--hamming-n N` | int | — | Bound N |
+| `--hamming-k K` | int | — | Divisor k |
+| `--hamming-p P` | int | — | Loop over primes k ≤ P |
+| `--hamming-i I` | int | 1 | Parameter i |
+| `--hamming-j J` | int | 0 | Parameter j |
+| `--hamming-all-j` | flag | False | Loop over j = 0..k-1 |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --hamming-n 1000 --hamming-k 17 --hamming-i 1 --hamming-j 0
@@ -770,22 +776,22 @@ python3 -m sufes --hamming-n 1000 --hamming-p 31 --hamming-i 1 --hamming-all-j
 
 ### 5.19 `coalescence`
 
-**But** : compare les trajectoires de `n` et `n+1` pour détecter à quel pas elles
-se rejoignent (coalescence).
+**Purpose**: compares the trajectories of `n` and `n+1` to detect at which step
+they merge (coalesce).
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--coalescence-n N` | int | — | Borne N |
-| `--coalescence-k K` | int | — | Diviseur k |
-| `--coalescence-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--coalescence-i I` | int | 1 | Paramètre i |
-| `--coalescence-j J` | int | 0 | Paramètre j |
-| `--coalescence-j-multi M` | int | 1 | Boucle sur j ∈ [0, M·k) |
-| `--coalescence-verbose` | flag | False | Écriture détaillée par paire (n, n+1) |
+| `--coalescence-n N` | int | — | Bound N |
+| `--coalescence-k K` | int | — | Divisor k |
+| `--coalescence-p P` | int | — | Loop over primes k ≤ P |
+| `--coalescence-i I` | int | 1 | Parameter i |
+| `--coalescence-j J` | int | 0 | Parameter j |
+| `--coalescence-j-multi M` | int | 1 | Loop over j ∈ [0, M·k) |
+| `--coalescence-verbose` | flag | False | Detailed output per (n, n+1) pair |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --coalescence-n 1000 --coalescence-k 17 --coalescence-i 1 --coalescence-j 0
@@ -797,19 +803,19 @@ python3 -m sufes --coalescence-n 1000 --coalescence-p 31 --coalescence-i 1 --coa
 
 ### 5.20 `kernel`
 
-**But** : analyse de toutes les valeurs `n < k`.
+**Purpose**: analysis for all values `n < k`.
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--kernel` | flag | — | Active le mode kernel (avec `--kernel-k`) |
-| `--kernel-k K` | int | — | Diviseur k |
-| `--kernel-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--kernel-i I` | int | 1 | Paramètre i |
-| `--kernel-j J` | int | 0 | Paramètre j |
+| `--kernel` | flag | — | Enable kernel mode (with `--kernel-k`) |
+| `--kernel-k K` | int | — | Divisor k |
+| `--kernel-p P` | int | — | Loop over primes k ≤ P |
+| `--kernel-i I` | int | 1 | Parameter i |
+| `--kernel-j J` | int | 0 | Parameter j |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --kernel --kernel-k 17 --kernel-i 1 --kernel-j 0
@@ -821,10 +827,10 @@ python3 -m sufes --kernel-p 31 --kernel-i 1 --kernel-j 0
 
 ### 5.21 `datalake`
 
-**But** : exporter les résultats dans une arborescence stable sur disque,
-avec reprise automatique après arrêt (checkpoint par tranche).
+**Purpose**: export results to a stable on-disk directory tree,
+with automatic resume after interruption (checkpoint per chunk).
 
-**Layout** :
+**Layout**:
 
 ```
 {datalake_path}/k{k}/i{i}/chunk_XXXXXXXX_YYYYYYYY/data.json
@@ -833,80 +839,80 @@ avec reprise automatique après arrêt (checkpoint par tranche).
 {datalake_path}/k{k}/i{i}/checkpoint.json
 ```
 
-**Flags** :
+**Flags**:
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--datalake-path PATH` | str | — | Répertoire racine du lac de données |
-| `--datalake-n N` | int | — | Borne N (obligatoire) |
-| `--datalake-k K` | int | — | Diviseur k |
-| `--datalake-p P` | int | — | Boucle sur k premiers ≤ P |
-| `--datalake-i-max` | int | k | Boucle i = 1..i_max |
+| `--datalake-path PATH` | str | — | Root directory of the data lake |
+| `--datalake-n N` | int | — | Bound N (required) |
+| `--datalake-k K` | int | — | Divisor k |
+| `--datalake-p P` | int | — | Loop over primes k ≤ P |
+| `--datalake-i-max` | int | k | Loop i = 1..i_max |
 | `--datalake-j-mult M` | int | 2 | j ∈ [0, M·k) |
-| `--datalake-base-chunk` | int | 10 000 | Taille de base des tranches |
-| `--datalake-trajectory-limit` | int | 200 | Limite les nœuds sauvegardés par trajectoire (0 = aucun) |
-| `--datalake-trajectory-hash` | flag | False | Ajoute un SHA256 de chaque trajectoire |
+| `--datalake-base-chunk` | int | 10,000 | Base chunk size |
+| `--datalake-trajectory-limit` | int | 200 | Limit saved nodes per trajectory (0 = none) |
+| `--datalake-trajectory-hash` | flag | False | Add a SHA256 hash for each trajectory |
 
-**Exemples** :
+**Examples**:
 
 ```bash
 python3 -m sufes --datalake-path /data/sufes_dl --datalake-k 47 --datalake-n 10000000 \
   --datalake-base-chunk 10000 --datalake-j-mult 2
 
-# Tous les k premiers ≤ 47, parallélisé
+# All primes k ≤ 47, parallelized
 python3 -m sufes --datalake-path /data/sufes_dl --datalake-p 47 --datalake-n 1000000 \
   --datalake-base-chunk 10000 --datalake-j-mult 2 --workers 4
 ```
 
 ---
 
-## 6. Options globales
+## 6. Global options
 
-Ces options s'appliquent à toutes les features.
+These options apply to all features.
 
-| Flag | Type | Défaut | Description |
+| Flag | Type | Default | Description |
 |---|---|---|---|
-| `--start S` | int | 1 | Valeur de départ incluse (intervalle [S, E]) |
-| `--end E` | int | 1000 | Valeur de fin incluse |
-| `--base B` | int | 3 | Diviseur de base (si `--k` n'est pas fourni) |
-| `--k K` | int | None | Diviseur k explicite |
-| `--j J` | int | None | Paramètre j (runs non-famille) |
-| `--i I` | int | 1 | Paramètre i (runs non-famille) |
-| `--p P` | int | None | Boucle famille pour tous les k premiers ≤ P |
-| `--kmax M` | int | None | Boucle famille pour k = 2..M |
-| `--family` | flag | — | Active la famille complète pour le k donné |
-| `--all-i` | flag | — | Considère tous i = 1..k-1 |
-| `--compact-json` | flag | — | JSON compact (sans listes d'origines) |
-| `--alternated` | flag | — | Active la variante alternée |
-| `--alt-m M` | int | 1 | Paramètre m de la variante alternée (doit être < k) |
-| `--workers W` | int | 4 | Workers pour la parallélisation |
-| `--chunk-size C` | int | 100 000 | Taille des chunks (avec `--workers > 1`) |
-| `--max-iters L` | int | 500 000 | Limite d'itérations par trajectoire |
-| `--divergence-threshold T` | float | 1e18 | Seuil de divergence numérique |
-| `--use-gmpy` | flag | — | Utilise `gmpy2` si disponible (grands entiers) |
-| `--use-numba` | flag | — | Utilise `numba` JIT si disponible (expérimental) |
-| `--out PATH` | str | None | Fichier JSON de sortie additionnel (optionnel) |
+| `--start S` | int | 1 | Inclusive start value (range [S, E]) |
+| `--end E` | int | 1000 | Inclusive end value |
+| `--base B` | int | 3 | Base divisor (if `--k` is not provided) |
+| `--k K` | int | None | Explicit divisor k |
+| `--j J` | int | None | Parameter j (non-family runs) |
+| `--i I` | int | 1 | Parameter i (non-family runs) |
+| `--p P` | int | None | Family loop over all primes k ≤ P |
+| `--kmax M` | int | None | Family loop for k = 2..M |
+| `--family` | flag | — | Enable the full family for the given k |
+| `--all-i` | flag | — | Consider all i = 1..k-1 |
+| `--compact-json` | flag | — | Compact JSON (without origin lists) |
+| `--alternated` | flag | — | Enable the alternated variant |
+| `--alt-m M` | int | 1 | Parameter m of the alternated variant (must be < k) |
+| `--workers W` | int | 4 | Workers for parallelization |
+| `--chunk-size C` | int | 100,000 | Chunk size (with `--workers > 1`) |
+| `--max-iters L` | int | 500,000 | Iteration limit per trajectory |
+| `--divergence-threshold T` | float | 1e18 | Numerical divergence threshold |
+| `--use-gmpy` | flag | — | Use `gmpy2` if available (large integers) |
+| `--use-numba` | flag | — | Use `numba` JIT if available (experimental) |
+| `--out PATH` | str | None | Additional JSON output file (optional) |
 
 ---
 
-## 7. Structure des sorties
+## 7. Output structure
 
-À chaque exécution, un dossier daté est créé sous `./output/` :
+At each execution, a timestamped folder is created under `./output/`:
 
 ```
 output/{prefix}_{YYYYMMDD}_{HHMMSS}_{suffix}/
-  run_info.txt          # paramètres CLI utilisés
-  run.log               # capture stdout/stderr
-  *.json                # résumés par feature
-  *.csv                 # résumés au format CSV
-  *.png                 # visualisations (si matplotlib installé)
+  run_info.txt          # CLI parameters used
+  run.log               # captured stdout/stderr
+  *.json                # feature summaries
+  *.csv                 # summaries in CSV format
+  *.png                 # visualizations (if matplotlib is installed)
 ```
 
-**Préfixes de dossier par feature** :
+**Output folder prefixes by feature**:
 
-| Feature | Préfixe dossier |
+| Feature | Folder prefix |
 |---|---|
-| `divisions` (ou `--epsilon-*`) | `divisions_` |
+| `divisions` (or `--epsilon-*`) | `divisions_` |
 | `residu-distribution` | `residu-distribution_` |
 | `footprint` | `footprint_` |
 | `cycle` | `cycle_` |
@@ -923,29 +929,29 @@ output/{prefix}_{YYYYMMDD}_{HHMMSS}_{suffix}/
 | `coalescence` | `coalescence_` |
 | `pearson` | `pearson_` |
 | `resistance` | `resistance_` |
-| Autres / famille | `run_` |
+| Other / family | `run_` |
 
 ---
 
-## 8. Dépendances
+## 8. Dependencies
 
-| Package | Rôle | Obligatoire |
+| Package | Role | Required |
 |---|---|---|
 | Python ≥ 3.8 | Runtime | ✅ |
-| `matplotlib` | Génération des PNG | ✅ (pour les plots) |
-| `numpy` | Calculs numériques | ✅ (pour les plots) |
-| `pandas` | Post-traitement, heatmaps | Optionnel |
-| `seaborn` | Visualisations avancées | Optionnel |
-| `gmpy2` | Arithmétique grandes valeurs (`--use-gmpy`) | Optionnel |
-| `numba` | Accélération JIT (`--use-numba`) | Optionnel |
+| `matplotlib` | PNG generation | ✅ (for plots) |
+| `numpy` | Numerical computations | ✅ (for plots) |
+| `pandas` | Post-processing, heatmaps | Optional |
+| `seaborn` | Advanced visualizations | Optional |
+| `gmpy2` | Large integer arithmetic (`--use-gmpy`) | Optional |
+| `numba` | JIT acceleration (`--use-numba`) | Optional |
 
-Installation :
+Installation:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Ou installation minimale :
+Or minimal installation:
 
 ```bash
 pip install matplotlib numpy
