@@ -9,7 +9,8 @@ statistics and visualizations.
 
 The document associated with this repository is available here:
 
-→ https://zenodo.org/records/20498713
+→ https://zenodo.org/records/20553299
+→ https://www.researchgate.net/publication/405691886_Sufes_Conjecture_a_parameterized_generalization_of_the_SyracuseCollatz_conjecture
 
 ---
 
